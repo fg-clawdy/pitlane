@@ -609,9 +609,9 @@
       ],
       "dependencies": ["US-006"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "FIA scoring table admin-editable for rule changes",
+      "status": "done",
+      "passes": true,
+      "notes": "FIA scoring table admin-editable for rule changes. Completed 2026-02-23. Also implemented linear_20 and proprietary scoring systems.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E scoring passes"]
     },
     {

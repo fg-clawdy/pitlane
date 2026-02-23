@@ -9,15 +9,17 @@
 - TypeScript compilation: npx tsc --project apps/api/tsconfig.json
 - Data discrepancy tracking: compare Jolpica values with admin-protected values field by field
 - Commissioner notifications use Notification model with type 'data_discrepancy'
+- Scoring module supports all three scoring types: fia_official, linear_20, proprietary
+- DGE (Double Goose Egg) tracking is built into the scoring calculation
 
 Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 6 / 49 (12%)
+Stories Completed: 7 / 49 (14%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 12%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 14%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -26,6 +28,7 @@ Completed Stories:
 - US-006: Jolpica Race Results Import ✓
 - US-008: Create League ✓
 - US-009: Join League ✓
+- US-016: Scoring Engine - FIA Official ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
@@ -37,7 +40,6 @@ Pending Stories (by priority):
 - US-013: Auto-Draft Preference Queue (Priority 2)
 - US-014: Driver Substitution After Draft Lock (Priority 2)
 - US-015: Missed Pick Resolution (Priority 2)
-- US-016: Scoring Engine - FIA Official (Priority 1, depends on US-006)
 - US-017: Scoring Engine - Linear 20-Point (Priority 1, depends on US-006)
 - US-018: Scoring Engine - Proprietary (Priority 1, depends on US-006)
 - US-019: Double Goose Egg (DGE) Tracking (Priority 2)
@@ -72,7 +74,7 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-016/017/018 (Scoring Engines) or US-011 (Draft Window Lifecycle) - all Priority 1 with met dependencies
+Next Story: US-017/018 (Scoring Engines) or US-011 (Draft Window Lifecycle) - all Priority 1 with met dependencies
 
 ## 2026-02-23T14:19:00Z - US-002 - User Login with Account Lockout
 
@@ -307,6 +309,53 @@ Next Story: US-016/017/018 (Scoring Engines) or US-011 (Draft Window Lifecycle) 
 - Default draft type is 'snake'
 - Default visibility is 'private'
 - Team name defaults to user's defaultTeamName or generated from user ID
+- TypeScript compiles successfully with all changes
+
+---
+
+## 2026-02-23T17:32:00Z - US-016 - Scoring Engine - FIA Official
+
+**What was implemented:**
+- Complete scoring engine with support for all three scoring systems (fia_official, linear_20, proprietary)
+- FIA official scoring: positions 1-10 score 25,18,15,12,10,8,6,4,2,1 points, positions 11-20 score 0
+- Fastest lap bonus (+1) for FIA scoring if driver finishes in top 10
+- Linear 20-point scoring: 1st=20pts, declining by 1 per position to 20th=1pt
+- Proprietary scoring: max(0, 10 - abs(position - 10)) - peaks at position 10 with 10 points
+- Finish status handling: DNF, DNS, DSQ all score 0
+- Player race score = Driver 1 score + Driver 2 score
+- Double Goose Egg (DGE) detection when both drivers score 0
+- Weekly winner determination (highest score, ties allowed)
+- League standings calculation with total points, weekly wins, DGE count
+- Score recalculation for admin overrides
+- API endpoints for standings and race scores
+
+**Files changed:**
+- apps/api/src/modules/scoring/types.ts - Scoring types, interfaces, and scoring tables
+- apps/api/src/modules/scoring/scoring.service.ts - Core scoring logic and calculations
+- apps/api/src/modules/scoring/scoring.controller.ts - HTTP handlers for scoring endpoints
+- apps/api/src/modules/scoring/scoring.routes.ts - Fastify routes for scoring
+- apps/api/src/index.ts - Added scoring routes registration
+
+**Learnings for future iterations:**
+- Scoring module is in modules/scoring/ directory
+- All three scoring types are implemented in one service for consistency
+- SCORING_CONFIGS object contains configuration for all scoring types
+- Status normalization handles various status strings (Finished, DNF, DNS, DSQ, +1 LAP, etc.)
+- LeagueMemberStat is updated atomically with race scores
+- Weekly winners can be multiple (ties allowed)
+- DGE tracking is built into the scoring calculation
+
+**Gotchas encountered:**
+- Must pass PrismaClient to controller constructor for league/race lookups
+- Fastify request.server.prisma doesn't exist - need to pass prisma instance
+
+**Useful context:**
+- API endpoints:
+  - GET /api/v1/leagues/:id/standings - Get league standings
+  - GET /api/v1/leagues/:id/races/:round/scores - Get race scores
+  - POST /api/v1/admin/scoring/calculate/:raceId - Calculate scores for a race
+  - POST /api/v1/admin/scoring/recalculate/:leagueId - Recalculate all league scores
+- Score calculation is triggered after Jolpica race results import
 - TypeScript compiles successfully with all changes
 
 ---
