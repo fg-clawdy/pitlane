@@ -1,0 +1,43 @@
+Ralph Loop Progress - PitLane MVP
+=====================================
+Started: 2026-02-23T00:00:00Z
+
+Stories Completed: 1 / 49 (2%)
+Current Story: US-001 (completed)
+
+Progress:
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 2%
+
+Completed Stories:
+- US-001: User Registration with Email Verification ✓
+
+Pending Stories (by priority):
+- US-002: User Login with Account Lockout (Priority 1, depends on US-001)
+- US-005: Jolpica Data Import - Seasons and Races (Priority 1)
+- US-008: Create League (Priority 1, depends on US-001, US-002)
+- US-009: Join League (Priority 1, depends on US-001, US-002, US-008)
+- US-011: Draft Window Lifecycle (Priority 1)
+- US-012: Draft Pick Submission (Priority 1, depends on US-011)
+- US-016: Scoring Engine - FIA Official (Priority 1, depends on US-006)
+- US-017: Scoring Engine - Linear 20-Point (Priority 1, depends on US-006)
+- US-018: Scoring Engine - Proprietary (Priority 1, depends on US-006)
+- US-020: Weekly Winners & Season Podium (Priority 1)
+- US-021: League Standings View (Priority 1, depends on US-019, US-020)
+- US-022: Live Draft Board (WebSocket) (Priority 1, depends on US-012)
+- US-030: Landing Page (Priority 1)
+- US-031: Authentication Screens (Priority 1, depends on US-001, US-002)
+- US-032: Dashboard & League List (Priority 1)
+- US-033: Create League Screen (Priority 1, depends on US-008)
+- US-034: League Home & Standings (Priority 1, depends on US-021)
+- US-035: Live Draft Board Screen (Priority 1, depends on US-022)
+- US-039: API Auth Endpoints (Priority 1, depends on US-001, US-002)
+- US-040: API User Endpoints (Priority 1)
+- US-041: API F1 Data Endpoints (Priority 1, depends on US-005)
+- US-042: API League Endpoints (Priority 1)
+- US-043: API Draft Endpoints (Priority 1)
+- US-044: API Scoring & Standings Endpoints (Priority 1)
+- US-047: Background Jobs - Jolpica Sync (Priority 1)
+- US-048: Background Jobs - Draft System (Priority 1)
+- US-049: Background Jobs - Scoring & Notifications (Priority 1)
+
+Next Story: US-002 - User Login with Account Lockout

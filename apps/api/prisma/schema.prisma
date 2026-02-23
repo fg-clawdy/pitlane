@@ -1,0 +1,448 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  super_admin
+  member
+}
+
+enum UserStatus {
+  pending_verification
+  active
+  suspended
+}
+
+model User {
+  id                String              @id @default(cuid())
+  email             String              @unique
+  username          String              @unique
+  passwordHash      String
+  status            UserStatus          @default(pending_verification)
+  role              UserRole            @default(member)
+  displayName       String?
+  defaultTeamName   String?
+  emailEnabled      Boolean             @default(true)
+  pushEnabled       Boolean             @default(false)
+  failedLoginAttempts Int               @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  refreshTokens     RefreshToken[]
+  verificationTokens VerificationToken[]
+  pushSubscriptions PushSubscription[]
+  emailChangeRequests EmailChangeRequest[]
+  leagueMemberships LeagueMember[]
+  autoDraftPreferences AutoDraftPreference[]
+  notifications     Notification[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model VerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String
+  p256dh    String
+  auth      String
+  userId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+}
+
+model EmailChangeRequest {
+  id              String   @id @default(cuid())
+  userId          String
+  newEmail        String
+  token           String   @unique
+  expiresAt       DateTime
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  holdWaivedAt    DateTime?
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Season {
+  id        String   @id @default(cuid())
+  year      Int      @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  races     Race[]
+  drivers   Driver[]
+}
+
+model Race {
+  id          String   @id @default(cuid())
+  seasonId    String
+  round       Int
+  raceName    String
+  circuitName String
+  date        DateTime
+  time        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  season      Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  results     RaceResult[]
+  draftWindows DraftWindow[]
+  raceScores  RaceScore[]
+
+  @@unique([seasonId, round])
+  @@index([seasonId])
+}
+
+model Driver {
+  id              String   @id @default(cuid())
+  driverId        String
+  permanentNumber Int?
+  code            String
+  givenName       String
+  familyName      String
+  nationality     String
+  dateOfBirth     DateTime
+  seasonId        String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  season          Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  results         RaceResult[]
+  draftPicks      DraftPick[]
+
+  @@unique([seasonId, driverId])
+  @@index([seasonId])
+}
+
+model RaceResult {
+  id              String   @id @default(cuid())
+  raceId          String
+  driverId        String
+  position        Int
+  points          Float
+  status          String
+  time            String?
+  fastestLap      Boolean  @default(false)
+  jolpicaValue    Json?
+  adminValue      Json?
+  adminProtected  Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  race            Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  driver          Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  discrepancies   DataDiscrepancy[]
+
+  @@unique([raceId, driverId])
+  @@index([raceId])
+  @@index([driverId])
+}
+
+model DataDiscrepancy {
+  id          String   @id @default(cuid())
+  raceResultId String
+  field       String
+  jolpicaValue Json?
+  adminValue  Json?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  raceResult  RaceResult @relation(fields: [raceResultId], references: [id], onDelete: Cascade)
+
+  @@index([raceResultId])
+}
+
+model DriverSubstitution {
+  id          String   @id @default(cuid())
+  raceId      String
+  originalDriverId String
+  replacementDriverId String?
+  reason      String
+  confirmedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([raceId])
+}
+
+model League {
+  id                      String   @id @default(cuid())
+  name                    String
+  seasonId                String
+  scoringType             String   @default("proprietary")
+  draftType               String   @default("snake")
+  visibility              String   @default("private")
+  joinApprovalRequired    Boolean  @default(false)
+  targetPlayers           Int      @default(11)
+  maxPlayers              Int      @default(11)
+  missedPickResolution    String   @default("random")
+  substitutionPolicy      String   @default("auto_replace")
+  draftOrderRandomized    Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  season                  Season   @relation(fields: [seasonId], references: [id])
+  members                 LeagueMember[]
+  draftWindows            DraftWindow[]
+  inviteLinks             InviteLink[]
+  joinRequests            JoinRequest[]
+  commissionerFlags       CommissionerFlag[]
+
+  @@unique([seasonId, name])
+  @@index([seasonId])
+}
+
+model LeagueMember {
+  id          String   @id @default(cuid())
+  leagueId    String
+  userId      String
+  teamName    String
+  joinedAt    DateTime @default(now())
+  leftAt      DateTime?
+
+  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stats       LeagueMemberStat?
+  draftPicks  DraftPick[]
+  raceScores  RaceScore[]
+
+  @@unique([leagueId, userId])
+  @@index([leagueId])
+  @@index([userId])
+}
+
+model LeagueMemberStat {
+  id              String   @id @default(cuid())
+  leagueMemberId  String   @unique
+  totalPoints     Float    @default(0)
+  weeklyWins      Int      @default(0)
+  dgeCount        Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  leagueMember    LeagueMember @relation(fields: [leagueMemberId], references: [id], onDelete: Cascade)
+}
+
+model DraftWindow {
+  id          String   @id @default(cuid())
+  leagueId    String
+  raceId      String
+  opensAt     DateTime
+  closesAt    DateTime
+  status      String   @default("upcoming")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  race        Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  picks       DraftPick[]
+
+  @@unique([leagueId, raceId])
+  @@index([leagueId])
+  @@index([raceId])
+}
+
+model DraftPick {
+  id              String   @id @default(cuid())
+  draftWindowId   String
+  leagueMemberId  String
+  driverId        String
+  round           Int
+  pickOrder       Int
+  resolutionMethod String?
+  submittedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  draftWindow     DraftWindow   @relation(fields: [draftWindowId], references: [id], onDelete: Cascade)
+  leagueMember    LeagueMember  @relation(fields: [leagueMemberId], references: [id], onDelete: Cascade)
+  driver          Driver        @relation(fields: [driverId], references: [id])
+
+  @@unique([draftWindowId, leagueMemberId, round])
+  @@index([draftWindowId])
+  @@index([leagueMemberId])
+  @@index([driverId])
+}
+
+model AutoDraftPreference {
+  id          String   @id @default(cuid())
+  userId      String
+  driverId    String
+  rank        Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, driverId])
+  @@index([userId])
+}
+
+model RaceScore {
+  id              String   @id @default(cuid())
+  leagueId        String
+  raceId          String
+  leagueMemberId  String
+  driver1Score    Float    @default(0)
+  driver2Score    Float    @default(0)
+  totalScore      Float    @default(0)
+  isWeeklyWinner  Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  league          League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  race            Race         @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  leagueMember    LeagueMember @relation(fields: [leagueMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, raceId, leagueMemberId])
+  @@index([leagueId])
+  @@index([raceId])
+  @@index([leagueMemberId])
+}
+
+model InviteLink {
+  id          String   @id @default(cuid())
+  leagueId    String
+  token       String   @unique
+  expiresAt   DateTime
+  maxUses     Int?
+  createdAt   DateTime @default(now())
+
+  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  uses        InviteLinkUse[]
+
+  @@index([token])
+  @@index([leagueId])
+}
+
+model InviteLinkUse {
+  id          String   @id @default(cuid())
+  inviteLinkId String
+  userId      String
+  usedAt      DateTime @default(now())
+
+  inviteLink  InviteLink @relation(fields: [inviteLinkId], references: [id], onDelete: Cascade)
+
+  @@index([inviteLinkId])
+  @@index([userId])
+}
+
+model JoinRequest {
+  id          String   @id @default(cuid())
+  leagueId    String
+  userId      String
+  teamName    String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, userId])
+  @@index([leagueId])
+  @@index([userId])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  body        String
+  data        Json?
+  read        Boolean  @default(false)
+  pushSent    Boolean  @default(false)
+  emailSent   Boolean  @default(false)
+  pushFailed  Boolean  @default(false)
+  emailFailed Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  entityType  String
+  entityId    String
+  changes     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+}
+
+model CommissionerFlag {
+  id          String   @id @default(cuid())
+  leagueId    String
+  userId      String
+  issue       String
+  status      String   @default("open")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@index([leagueId])
+  @@index([userId])
+  @@index([status])
+}

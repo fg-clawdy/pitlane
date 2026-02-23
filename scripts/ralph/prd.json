@@ -1,0 +1,1268 @@
+{
+  "meta": {
+    "title": "PitLane v1.0 MVP Product Requirements Document",
+    "version": "0.9.0",
+    "documentId": "PRD-PITLANE-MVP-001",
+    "targetRelease": "Q2 2026",
+    "lastUpdated": "2026-02-22",
+    "originalPRDHash": "pitlane-mvp-draft-2026-02-22"
+  },
+  "vision": {
+    "statement": "PitLane is the Formula 1 fantasy sports platform that enables passionate F1 fans to compete weekly in skill-based constructor drafts by selecting two drivers each race, unlike generic multi-sport fantasy apps which dilute the F1 experience with one-size-fits-all mechanics. Our north star is achieving 10,000 monthly active league members in the first full F1 season after launch.",
+    "elevatorPitch": "PitLane is a fantasy Formula 1 app where up to 11 players per league draft two drivers before each Grand Prix, score points based on race results, and compete for weekly wins and a season podium. It's the only fantasy platform built exclusively and deeply for F1, with automatic Jolpica-powered race data and unique per-race constructor drafts.",
+    "problemStatements": [
+      {
+        "id": "PROB-001",
+        "problem": "No purpose-built F1 fantasy product with per-race drafting exists",
+        "severity": 5,
+        "whoIsImpacted": "F1 fans",
+        "currentWorkaround": "Use ESPN/generic fantasy (season-long, wrong sport focus)"
+      },
+      {
+        "id": "PROB-002",
+        "problem": "Existing F1 fantasy apps (F1 official) lock users into season-long rosters with no weekly strategy",
+        "severity": 4,
+        "whoIsImpacted": "F1 fans wanting weekly engagement",
+        "currentWorkaround": "Accept the limitation"
+      },
+      {
+        "id": "PROB-003",
+        "problem": "Private friend leagues with F1 scoring require manual spreadsheets",
+        "severity": 5,
+        "whoIsImpacted": "Casual fan groups",
+        "currentWorkaround": "Google Sheets maintained by one person"
+      },
+      {
+        "id": "PROB-004",
+        "problem": "Race data availability is fragmented; no reliable free live results API",
+        "severity": 3,
+        "whoIsImpacted": "Developers/apps",
+        "currentWorkaround": "Scraping, paid APIs"
+      }
+    ]
+  },
+  "scope": {
+    "inScope": [
+      "User auth & profiles (email registration, verification, username, default team name)",
+      "Season & race data sync (Jolpica integration, automatic import, admin override)",
+      "League management (create, join, invite, public/private, commissioner CRUD)",
+      "Per-race draft system (snake/regular draft, 24h timers, auto-draft, rotation)",
+      "Scoring engine (FIA official, linear 20-pt, proprietary 10th=10pts)",
+      "Results & standings (weekly winners, season podium, live draft board)",
+      "Notification system (HTML5 push + email (SMTP), notification history)",
+      "Admin panel (data override, Jolpica sync management, user management)",
+      "DNF/DNS/DGE tracking (special stat tracking for double goose eggs)"
+    ],
+    "outOfScope": [
+      "Native iOS / Android apps (Web-first MVP strategy)",
+      "Multiple sports (Anti-scope creep; F1-only is the brand)",
+      "Payments / subscriptions (Free product for MVP)",
+      "Live race telemetry / live scoring mid-race",
+      "Social features (chat, comments)",
+      "MFA / social login",
+      "Trade / transfer between leagues",
+      "Commissioner delegation / co-commissioner"
+    ]
+  },
+  "personas": [
+    {
+      "id": "PERSONA-001",
+      "name": "The Commissioner",
+      "description": "Marco, 34, F1 superfan",
+      "technicalProficiency": "3/5",
+      "primaryGoal": "Run a tight, fair fantasy league for his friend group",
+      "painPoints": "Manually updating spreadsheets after each race; chasing friends for picks; resolving scoring disputes",
+      "rbacRole": "commissioner",
+      "primaryFlows": ["FLOW-003", "FLOW-004", "FLOW-007"],
+      "jtbd": "When race weekend approaches, I want to know everyone has submitted their picks and scores will update automatically, so I can focus on watching the race."
+    },
+    {
+      "id": "PERSONA-002",
+      "name": "The Active Drafter",
+      "description": "Priya, 28, casual F1 fan",
+      "technicalProficiency": "4/5",
+      "primaryGoal": "Win her work league's season podium",
+      "painPoints": "Missing draft windows; not knowing driver standings; forgetting to set auto-draft",
+      "rbacRole": "member",
+      "primaryFlows": ["FLOW-005", "FLOW-006", "FLOW-008"],
+      "jtbd": "When it's my turn to draft, I want a clear notification and a ranked list of available drivers, so I can make a strategic pick quickly."
+    },
+    {
+      "id": "PERSONA-003",
+      "name": "The Admin",
+      "description": "Dev team member",
+      "technicalProficiency": "5/5",
+      "primaryGoal": "Ensure data integrity and system health with minimal manual intervention",
+      "painPoints": "Jolpica data delays after race; driver substitutions mid-season; commissioner escalations",
+      "rbacRole": "super_admin",
+      "primaryFlows": ["FLOW-010", "FLOW-011", "FLOW-012"]
+    }
+  ],
+  "coreFlows": [
+    {
+      "id": "FLOW-001",
+      "name": "User Registration",
+      "actor": "New user",
+      "trigger": "Landing page CTA",
+      "outcome": "Verified account created"
+    },
+    {
+      "id": "FLOW-002",
+      "name": "User Login",
+      "actor": "Registered user",
+      "trigger": "Login page",
+      "outcome": "Authenticated session"
+    },
+    {
+      "id": "FLOW-003",
+      "name": "Create League",
+      "actor": "Commissioner",
+      "trigger": "Dashboard 'Create League' button",
+      "outcome": "League created, shareable"
+    },
+    {
+      "id": "FLOW-004",
+      "name": "Invite Members",
+      "actor": "Commissioner",
+      "trigger": "League settings",
+      "outcome": "Invite links sent"
+    },
+    {
+      "id": "FLOW-005",
+      "name": "Join League",
+      "actor": "Member",
+      "trigger": "Invite link or public search",
+      "outcome": "Member added to league"
+    },
+    {
+      "id": "FLOW-006",
+      "name": "Draft Pick Submission",
+      "actor": "Member",
+      "trigger": "Draft window open + member's turn",
+      "outcome": "Pick recorded"
+    },
+    {
+      "id": "FLOW-007",
+      "name": "Auto-Draft Execution",
+      "actor": "System (job)",
+      "trigger": "Draft window expires or preference set",
+      "outcome": "Pick auto-assigned"
+    },
+    {
+      "id": "FLOW-008",
+      "name": "View Live Draft Board",
+      "actor": "Member",
+      "trigger": "During draft window",
+      "outcome": "Real-time board visible"
+    },
+    {
+      "id": "FLOW-009",
+      "name": "Race Result Import",
+      "actor": "System (job)",
+      "trigger": "3 hrs after race start, every 2 hrs",
+      "outcome": "Scores calculated"
+    },
+    {
+      "id": "FLOW-010",
+      "name": "Admin Data Override",
+      "actor": "Admin",
+      "trigger": "Admin panel",
+      "outcome": "Override stored, audit trail created, commissioners notified"
+    },
+    {
+      "id": "FLOW-011",
+      "name": "Email Change",
+      "actor": "User",
+      "trigger": "Profile settings",
+      "outcome": "Email changed after hold period"
+    },
+    {
+      "id": "FLOW-012",
+      "name": "Notification Delivery",
+      "actor": "System",
+      "trigger": "Various triggers",
+      "outcome": "Notification sent via push + email"
+    }
+  ],
+  "scoringModes": {
+    "fia_official": {
+      "description": "Uses the actual FIA points system as of the current season",
+      "points": {
+        "1": 25,
+        "2": 18,
+        "3": 15,
+        "4": 12,
+        "5": 10,
+        "6": 8,
+        "7": 6,
+        "8": 4,
+        "9": 2,
+        "10": 1,
+        "11-20": 0,
+        "fastestLap": 1,
+        "dnf": 0,
+        "dns": 0,
+        "dsq": 0
+      },
+      "fastestLapBonus": "If driver finishes in top 10"
+    },
+    "linear_20": {
+      "description": "1st place = 20 points, each subsequent position earns 1 fewer point",
+      "points": {
+        "1": 20,
+        "2": 19,
+        "3": 18,
+        "4": 17,
+        "5": 16,
+        "6": 15,
+        "7": 14,
+        "8": 13,
+        "9": 12,
+        "10": 11,
+        "11": 10,
+        "12": 9,
+        "13": 8,
+        "14": 7,
+        "15": 6,
+        "16": 5,
+        "17": 4,
+        "18": 3,
+        "19": 2,
+        "20": 1,
+        "dnf": 0,
+        "dns": 0,
+        "dsq": 0
+      }
+    },
+    "proprietary": {
+      "description": "10th place = 10 points (maximum), symmetric decline from 10th",
+      "formula": "max(0, 10 - abs(finishing_position - 10))",
+      "minimumPoints": 1,
+      "points": {
+        "1": 1,
+        "2": 2,
+        "3": 3,
+        "4": 4,
+        "5": 5,
+        "6": 6,
+        "7": 7,
+        "8": 8,
+        "9": 9,
+        "10": 10,
+        "11": 9,
+        "12": 8,
+        "13": 7,
+        "14": 6,
+        "15": 5,
+        "16": 4,
+        "17": 3,
+        "18": 2,
+        "19": 1,
+        "20": 1,
+        "dnf": 0,
+        "dns": 0,
+        "dsq": 0
+      }
+    }
+  },
+  "technical": {
+    "stack": [
+      "Frontend: Next.js 15.x with React 19",
+      "UI: shadcn/ui + Tailwind CSS",
+      "State (Client): Zustand 5.x",
+      "State (Server): TanStack Query 5.x",
+      "Forms: React Hook Form + Zod",
+      "Language: TypeScript 5.x",
+      "Backend: Fastify 5.x",
+      "ORM: Prisma 5.x",
+      "Primary DB: PostgreSQL 16.x",
+      "Cache/Queue: Redis 7 + BullMQ",
+      "Auth: Custom JWT (RS256)",
+      "Email: SMTP (Nodemailer)",
+      "Push: Web Push (web-push npm)",
+      "Real-time: WebSocket (native Fastify WS)",
+      "Hosting: Vercel (FE), Railway/AWS ECS (BE)",
+      "CI/CD: GitHub Actions",
+      "Error Tracking: Sentry"
+    ],
+    "architecture": "Modular Monolith — modules: auth, users, leagues, drafts, scoring, f1data, notifications, admin. Runtime: Node.js 20 LTS. API Style: REST + OpenAPI 3.1. Versioning: /api/v1/ prefix. WebSocket endpoint: /ws/leagues/{id}/draft",
+    "prismaSchema": "generator client { provider = \"prisma-client-js\" } datasource db { provider = \"postgresql\" url = env(\"DATABASE_URL\") } // Full schema in PRD.md Section 12.2 with models: User, RefreshToken, VerificationToken, PushSubscription, EmailChangeRequest, Season, Race, Driver, RaceResult, DataDiscrepancy, DriverSubstitution, League, LeagueMember, LeagueMemberStat, DraftWindow, DraftPick, AutoDraftPreference, RaceScore, InviteLink, InviteLinkUse, JoinRequest, Notification, AuditLog, SystemSetting, CommissionerFlag"
+  },
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "User Registration with Email Verification",
+      "epic": "EPIC-001 — User Authentication & Profiles",
+      "description": "Email-based registration with verification. Username defaults to email prefix. Password must meet complexity requirements.",
+      "acceptanceCriteria": [
+        "Successful registration creates user with status pending_verification",
+        "Verification email is sent within 60s",
+        "Clicking valid link within 24h sets status active and issues JWT",
+        "Expired link shows resend option",
+        "Password meets complexity rules (min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special)",
+        "Duplicate email rejected with inline error",
+        "Invalid password disables Create Account button"
+      ],
+      "dependencies": [],
+      "priority": 1,
+      "status": "done",
+      "passes": true,
+      "notes": "Completed by clean subagent on 2026-02-23T00:51:00Z",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E registration flow passes"]
+    },
+    {
+      "id": "US-002",
+      "title": "User Login with Account Lockout",
+      "epic": "EPIC-001 — User Authentication & Profiles",
+      "description": "Email-based login with JWT tokens and account lockout after failed attempts.",
+      "acceptanceCriteria": [
+        "Valid credentials return access token (15min TTL) and refresh token (30d TTL)",
+        "After 5 consecutive failed attempts, account locked for 15 minutes",
+        "Locked account shows lock message with unlock time",
+        "On 401 from authenticated endpoint, attempt refresh once",
+        "Refresh failure redirects to /login"
+      ],
+      "dependencies": ["US-001"],
+      "priority": 1,
+      "status": "done",
+      "passes": true,
+      "notes": "JWT access token stored in memory, refresh token in httpOnly cookie",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E login flow passes"]
+    },
+    {
+      "id": "US-003",
+      "title": "User Profile Management",
+      "epic": "EPIC-001 — User Authentication & Profiles",
+      "description": "Users can edit profile fields including username, display name, team name, notification preferences.",
+      "acceptanceCriteria": [
+        "Username editable (3-30 chars, alphanumeric + . _ -)",
+        "Display name editable (1-50 chars, any UTF-8)",
+        "Default team name editable (1-50 chars)",
+        "Push notifications can be enabled/disabled",
+        "Email notifications can be enabled/disabled",
+        "Password change requires current password confirmation",
+        "Email change triggers hold period flow"
+      ],
+      "dependencies": ["US-001", "US-002"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Transactional emails cannot be disabled",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E profile update passes"]
+    },
+    {
+      "id": "US-004",
+      "title": "Email Change with Hold Period",
+      "epic": "EPIC-001 — User Authentication & Profiles",
+      "description": "Email change requires verification and configurable hold period for security.",
+      "acceptanceCriteria": [
+        "User requests email change with current password confirmation",
+        "System sends notification to current email with cancel option",
+        "System sends verification email to new email",
+        "Change completes only when new email verified AND hold period elapsed (unless waived)",
+        "Current email holder can cancel change during hold period",
+        "Current email holder can waive hold for immediate change",
+        "Change expires if not completed within 72 hours",
+        "All refresh tokens invalidated on completion"
+      ],
+      "dependencies": ["US-001", "US-002", "US-003"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Hold period admin-configurable, default 24h (86400 seconds)",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E email change flow passes"]
+    },
+    {
+      "id": "US-005",
+      "title": "Jolpica Data Import - Seasons and Races",
+      "epic": "EPIC-002 — F1 Season & Race Data",
+      "description": "Automated import of F1 seasons, races, circuits from Jolpica API.",
+      "acceptanceCriteria": [
+        "Season data imported on app startup for current year",
+        "Races imported with round, raceName, Circuit, date, time",
+        "Driver data imported with driverId, permanentNumber, code, givenName, familyName, nationality, dateOfBirth",
+        "Race results polled starting 3 hours post-race-start",
+        "Polling every 2 hours, max 18 checks (36 hours total)",
+        "After 18 failed checks, trigger admin alert"
+      ],
+      "dependencies": [],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Jolpica Base URL: https://api.jolpi.ca/ergast/f1/",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "Jolpica sync job passes"]
+    },
+    {
+      "id": "US-006",
+      "title": "Jolpica Race Results Import",
+      "epic": "EPIC-002 — F1 Season & Race Data",
+      "description": "Import race results from Jolpica with retry logic and admin fallback.",
+      "acceptanceCriteria": [
+        "Race results imported with position, Driver, Constructor, points, status, Time, FastestLap",
+        "Admin override fields preserved when Jolpica data differs",
+        "Data discrepancy records created for overridden fields",
+        "Commissioners notified of data discrepancies",
+        "Score calculation triggered after successful import"
+      ],
+      "dependencies": ["US-005"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Jolpica polling: HTTP 4xx = no retry (except 429), HTTP 5xx = retry after 2 hours",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E race result import passes"]
+    },
+    {
+      "id": "US-007",
+      "title": "Admin Data Override",
+      "epic": "EPIC-002 — F1 Season & Race Data",
+      "description": "Admin interface to manually enter or override F1 data from Jolpica.",
+      "acceptanceCriteria": [
+        "Admin can override any field on race_results, driver_substitutions, race_schedule",
+        "Override stores jolpica_value, admin_value, admin_protected flag",
+        "admin_protected=true prevents future Jolpica overwrites",
+        "All overrides trigger notification to league commissioners",
+        "Score recalculation triggered after override",
+        "All overrides logged in audit_log with before/after values"
+      ],
+      "dependencies": ["US-005", "US-006"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Super admin role required",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E admin override passes"]
+    },
+    {
+      "id": "US-008",
+      "title": "Create League",
+      "epic": "EPIC-003 — League Management",
+      "description": "Commissioners can create leagues with configurable settings.",
+      "acceptanceCriteria": [
+        "User who creates league becomes its commissioner",
+        "Commissioner can be commissioner of multiple leagues",
+        "User can be member of up to 10 leagues simultaneously",
+        "League name 3-80 chars, unique per season",
+        "Settings: scoring_type, draft_type, visibility, join_approval_required, target_players, max_players, missed_pick_resolution, substitution_policy",
+        "Commissioner can set/randomize draft order before first race"
+      ],
+      "dependencies": ["US-001", "US-002"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "League size: 2-11 players (22 F1 drivers ÷ 2)",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E create league passes"]
+    },
+    {
+      "id": "US-009",
+      "title": "Join League",
+      "epic": "EPIC-003 — League Management",
+      "description": "Users can join leagues via invite link or public search.",
+      "acceptanceCriteria": [
+        "Public leagues: any authenticated user can join up to max_players",
+        "Private leagues: can only join via invite link",
+        "Invite links: 8-char random token, expire after 7 days, one-time use per user",
+        "Join approval required triggers pending request for commissioner",
+        "Team name prompted on join, unique within league (1-50 chars)",
+        "Cannot join mid-season after 3rd race completed",
+        "Users can leave league voluntarily at any time"
+      ],
+      "dependencies": ["US-001", "US-002", "US-008"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Team name pre-filled from user.default_team_name",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E join league passes"]
+    },
+    {
+      "id": "US-010",
+      "title": "Commissioner League Management",
+      "epic": "EPIC-003 — League Management",
+      "description": "Commissioners have full control over their league settings and members.",
+      "acceptanceCriteria": [
+        "Commissioner can edit all league settings before first draft opens",
+        "scoring_type and draft_type locked after first draft",
+        "Commissioner can approve/deny join requests",
+        "Commissioner can generate invite links",
+        "Commissioner can remove members (historical picks retained)",
+        "Commissioner can override draft pick resolution for edge cases",
+        "Commissioner can flag issues to platform admin"
+      ],
+      "dependencies": ["US-008", "US-009"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Cannot modify historical race scores or picks directly",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-011",
+      "title": "Draft Window Lifecycle",
+      "epic": "EPIC-004 — Draft System",
+      "description": "Per-race draft system with open/close rules and turn timers.",
+      "acceptanceCriteria": [
+        "Draft window opens Monday 00:00 GMT of race week",
+        "Draft closes at qualifying start time OR when all players complete picks",
+        "Each player has 24 hours from turn start to make each pick",
+        "Draft closes automatically when all players submit both rounds",
+        "Late picks not accepted after qualifying start",
+        "Regular draft: Player 1→Player 2→...→Player N (both rounds)",
+        "Snake draft: Round 1 same as regular, Round 2 reverses"
+      ],
+      "dependencies": ["US-008", "US-009"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Draft order rotation: after each race, position N moves to N+1, last moves to 1",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E draft flow passes"]
+    },
+    {
+      "id": "US-012",
+      "title": "Draft Pick Submission",
+      "epic": "EPIC-004 — Draft System",
+      "description": "Players submit driver picks during their turn in the draft window.",
+      "acceptanceCriteria": [
+        "Available drivers: all 22 Jolpica-confirmed drivers",
+        "Driver already picked by another player in same league unavailable",
+        "Drivers displayed with name, team, season points, last race position",
+        "Pick validation: driver available, player's turn, window open",
+        "Pick submission broadcasts via WebSocket to all league members",
+        "Turn advances to next player after pick"
+      ],
+      "dependencies": ["US-011"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "WebSocket latency target: <500ms broadcast",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E draft pick passes"]
+    },
+    {
+      "id": "US-013",
+      "title": "Auto-Draft Preference Queue",
+      "epic": "EPIC-004 — Draft System",
+      "description": "Players can pre-rank drivers for automatic selection.",
+      "acceptanceCriteria": [
+        "Players can set weighted preference list during open draft window",
+        "Preference list is ordered (1 = highest preference)",
+        "Auto-draft fires immediately on turn start (not after 24h wait)",
+        "If all ranked drivers taken, system treats as no auto-draft (24h timer begins)",
+        "Players can update preference list before auto-pick fires",
+        "Auto-draft picks logged as resolution_method = auto_preference"
+      ],
+      "dependencies": ["US-011", "US-012"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Players do not need to rank all 22 drivers",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-014",
+      "title": "Driver Substitution After Draft Lock",
+      "epic": "EPIC-004 — Draft System",
+      "description": "Handle IRL driver substitutions that occur after draft window closes.",
+      "acceptanceCriteria": [
+        "Substitution BEFORE draft closes: replacement added to pool, original unavailable",
+        "Substitution AFTER draft closes: player notified immediately",
+        "redraft policy: player gets one-time re-pick from remaining (24h window)",
+        "auto_replace policy: replacement driver automatically assigned",
+        "System waits for Jolpica/admin confirmation before acting",
+        "DNS (no substitute) after draft lock: player scores 0 for that slot",
+        "All substitution events logged in driver_substitutions table"
+      ],
+      "dependencies": ["US-011", "US-012"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Substitution policy commissioner-configurable per league",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-015",
+      "title": "Missed Pick Resolution",
+      "epic": "EPIC-004 — Draft System",
+      "description": "Resolve picks when player fails to submit within 24-hour timer.",
+      "acceptanceCriteria": [
+        "random: Assign random available driver",
+        "top_points: Assign available driver with highest season championship points (random if tied)",
+        "no_pick: Player gets no driver, scores 0 for that slot",
+        "Resolution method logged in draft_picks.resolution_method",
+        "Player notified when pick expires and resolution applied"
+      ],
+      "dependencies": ["US-011", "US-012"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Missed pick resolution commissioner-configurable per league",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-016",
+      "title": "Scoring Engine - FIA Official",
+      "epic": "EPIC-005 — Scoring Engine",
+      "description": "Calculate scores using FIA official points system.",
+      "acceptanceCriteria": [
+        "Position 1-10 scores: 25, 18, 15, 12, 10, 8, 6, 4, 2, 1",
+        "Positions 11-20 score 0",
+        "Fastest lap bonus (+1) if driver finishes in top 10",
+        "DNF, DNS, DSQ all score 0",
+        "Player race score = Driver 1 score + Driver 2 score",
+        "DNF rule: any non-Finished status scores 0"
+      ],
+      "dependencies": ["US-006"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "FIA scoring table admin-editable for rule changes",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E scoring passes"]
+    },
+    {
+      "id": "US-017",
+      "title": "Scoring Engine - Linear 20-Point",
+      "epic": "EPIC-005 — Scoring Engine",
+      "description": "Calculate scores using linear 20-point system.",
+      "acceptanceCriteria": [
+        "1st place = 20 points",
+        "Each position after 1st earns 1 fewer point (20th = 1)",
+        "DNF, DNS, DSQ all score 0",
+        "Player race score = Driver 1 score + Driver 2 score"
+      ],
+      "dependencies": ["US-006"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Linear decline from 20 to 1",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-018",
+      "title": "Scoring Engine - Proprietary",
+      "epic": "EPIC-005 — Scoring Engine",
+      "description": "Calculate scores using proprietary 10th=10pts system (default).",
+      "acceptanceCriteria": [
+        "10th place = 10 points (maximum)",
+        "Each position further from 10th earns 1 fewer point",
+        "Formula: max(0, 10 - abs(position - 10))",
+        "Minimum 1 point for any finisher except DNF/DNS/DSQ/no driver",
+        "DNF, DNS, DSQ all score 0",
+        "Player race score = Driver 1 score + Driver 2 score"
+      ],
+      "dependencies": ["US-006"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Default scoring system for MVP",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-019",
+      "title": "Double Goose Egg (DGE) Tracking",
+      "epic": "EPIC-005 — Scoring Engine",
+      "description": "Track and display DGE occurrences (both drivers score 0).",
+      "acceptanceCriteria": [
+        "DGE occurs when BOTH drafted drivers score 0 points",
+        "DGE only applies to actual drivers, not no_pick",
+        "dge_count persisted per player per league across season",
+        "Displayed prominently in standings as DGE count",
+        "Admin overrides retroactively recalculate DGE stats"
+      ],
+      "dependencies": ["US-016", "US-017", "US-018"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "DGE = Double Goose Egg (🥚🥚)",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-020",
+      "title": "Weekly Winners & Season Podium",
+      "epic": "EPIC-005 — Scoring Engine",
+      "description": "Track and display weekly winners and season standings.",
+      "acceptanceCriteria": [
+        "Weekly winner: highest race score for given race",
+        "Ties: multiple winners possible",
+        "Weekly win recorded in race_scores.is_weekly_winner",
+        "Season podium: top 3 cumulative season points",
+        "Season standings updated after each race result scored",
+        "Season ends after final race of F1 season",
+        "Historical seasons preserved in read-only state"
+      ],
+      "dependencies": ["US-016", "US-017", "US-018"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "All historical picks/scores visible to all league members",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-021",
+      "title": "League Standings View",
+      "epic": "EPIC-006 — Standings, Stats & Live Draft Board",
+      "description": "Display season standings and race history to league members.",
+      "acceptanceCriteria": [
+        "Season standings table: rank, team name, username, total points, weekly wins, DGE count",
+        "Race-by-race history: expandable rows showing picks, scores, weekly winner",
+        "Current week: draft status, who has picked, timer remaining",
+        "All historical data visible to all members",
+        "Public visibility controlled by commissioner setting"
+      ],
+      "dependencies": ["US-019", "US-020"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Visibility: public or private controlled by commissioner",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E standings view passes"]
+    },
+    {
+      "id": "US-022",
+      "title": "Live Draft Board (WebSocket)",
+      "epic": "EPIC-006 — Standings, Stats & Live Draft Board",
+      "description": "Real-time draft board with WebSocket updates.",
+      "acceptanceCriteria": [
+        "Current pick order displayed (who is up, who is next)",
+        "Timer countdown for active player's 24h window",
+        "Already-drafted drivers per player per round",
+        "Available driver pool (22 minus drafted)",
+        "Real-time updates as picks submitted (<500ms latency)",
+        "On disconnect: show banner, fall back to 10s polling"
+      ],
+      "dependencies": ["US-012"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "WebSocket endpoint: /ws/leagues/{id}/draft",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E live draft board passes"]
+    },
+    {
+      "id": "US-023",
+      "title": "HTML5 Web Push Notifications",
+      "epic": "EPIC-007 — Notification System",
+      "description": "Send push notifications via Web Push Protocol.",
+      "acceptanceCriteria": [
+        "Users can grant/deny browser push permission",
+        "Push subscription stored per device",
+        "Users can enable/disable push in profile settings",
+        "VAPID authentication for push",
+        "Payload includes title, body, icon, badge, data.url",
+        "Expired subscriptions (410 Gone) auto-deleted"
+      ],
+      "dependencies": ["US-003"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Works on desktop and mobile web",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-024",
+      "title": "Email Notifications via SMTP",
+      "epic": "EPIC-007 — Notification System",
+      "description": "Send email notifications via SMTP.",
+      "acceptanceCriteria": [
+        "Email sent via SMTP (send-only)",
+        "Users can enable/disable email notifications in profile",
+        "Transactional emails cannot be disabled",
+        "Email templates for all notification types",
+        "Retry policy: 5 retries with exponential backoff",
+        "Failure after retries: log error, mark notification failed"
+      ],
+      "dependencies": ["US-003"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "SMTP credentials via environment variables",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-025",
+      "title": "In-App Notification Center",
+      "epic": "EPIC-007 — Notification System",
+      "description": "Notification history and management within the app.",
+      "acceptanceCriteria": [
+        "Bell icon shows unread count",
+        "Notification panel/page shows all notifications",
+        "Each notification: icon, title, body, timestamp, link, read/unread",
+        "Dismiss marks as read, remains in history permanently",
+        "History page shows all notifications, most recent first",
+        "Pagination: 50 per page",
+        "Filter by: All / Unread / League-specific"
+      ],
+      "dependencies": ["US-023", "US-024"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Notification history retained indefinitely",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-026",
+      "title": "Draft Event Notifications",
+      "epic": "EPIC-007 — Notification System",
+      "description": "Notifications for all draft-related events.",
+      "acceptanceCriteria": [
+        "Draft window opens: push + email to all league members",
+        "24h before close: push + email to incomplete members",
+        "It's player's turn: push + email to that player",
+        "Pick expires: push + email to affected player",
+        "Draft closes: push to all members",
+        "Driver substitution post-lock: push + email to affected player"
+      ],
+      "dependencies": ["US-011", "US-012", "US-014", "US-023", "US-024"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "See PRD Table: Notification Types & Templates",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-027",
+      "title": "Admin Dashboard",
+      "epic": "EPIC-008 — Admin Panel",
+      "description": "Main admin panel for platform administration.",
+      "acceptanceCriteria": [
+        "Race Data Management: view all races, sync status, manual entry/override",
+        "User Management: list all users, search, view/edit, suspend/unsuspend",
+        "System Settings: configure hold periods, polling parameters, scoring tables",
+        "Notification Log: searchable log of all notifications sent",
+        "Audit Log: searchable/filterable log of all admin actions",
+        "Commissioner Flags: list of issues flagged, status tracking"
+      ],
+      "dependencies": ["US-007"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Super admin role only, accessible at /admin",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-028",
+      "title": "Admin Race Data Entry",
+      "epic": "EPIC-008 — Admin Panel",
+      "description": "Manual race result entry form for admins.",
+      "acceptanceCriteria": [
+        "Fields: race (dropdown), driver (dropdown), finishing_position, finish_status, fastest_lap, admin_protected, notes",
+        "Finish status enum: Finished, DNF, DNS, DSQ, Other",
+        "Bulk entry: paste CSV (position,driver_code,status)",
+        "Form validates required fields",
+        "On save: triggers score recalculation"
+      ],
+      "dependencies": ["US-027"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Used when Jolpica fails or returns incorrect data",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-029",
+      "title": "System Configuration (Admin)",
+      "epic": "EPIC-008 — Admin Panel",
+      "description": "Admin-configurable system settings.",
+      "acceptanceCriteria": [
+        "email_change_hold_seconds: default 86400 (24h), min 0, max 604800 (7d)",
+        "jolpica_poll_start_hours_after_race: default 3",
+        "jolpica_poll_interval_hours: default 2",
+        "jolpica_max_polls: default 18",
+        "draft_pick_timeout_hours: default 24",
+        "invite_link_expiry_days: default 7",
+        "fia_scoring_table: JSON, position-to-points mapping",
+        "max_leagues_per_user: default 10",
+        "max_join_cutoff_races: default 3"
+      ],
+      "dependencies": ["US-027"],
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "notes": "All settings editable by super_admin",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-030",
+      "title": "Landing Page",
+      "epic": "EPIC-009 — Frontend Screens",
+      "description": "Public landing page for unauthenticated users.",
+      "acceptanceCriteria": [
+        "Route: /",
+        "Publicly accessible",
+        "Contains product pitch and CTA to sign up",
+        "SSG rendering"
+      ],
+      "dependencies": [],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Screen ID: SCR-001",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E landing page loads"]
+    },
+    {
+      "id": "US-031",
+      "title": "Authentication Screens",
+      "epic": "EPIC-009 — Frontend Screens",
+      "description": "Login, registration, password reset flows.",
+      "acceptanceCriteria": [
+        "Routes: /signup, /login, /forgot-password, /reset-password",
+        "Unauthenticated users only",
+        "SSR rendering",
+        "Client-side validation"
+      ],
+      "dependencies": ["US-001", "US-002"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Screen IDs: SCR-002, SCR-003, SCR-004, SCR-005, SCR-006",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E auth screens pass"]
+    },
+    {
+      "id": "US-032",
+      "title": "Dashboard & League List",
+      "epic": "EPIC-009 — Frontend Screens",
+      "description": "User dashboard showing leagues and quick actions.",
+      "acceptanceCriteria": [
+        "Routes: /dashboard, /leagues",
+        "Authenticated users",
+        "SSR rendering",
+        "Shows user's leagues with status"
+      ],
+      "dependencies": ["US-002", "US-008", "US-009"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Screen IDs: SCR-010, SCR-011",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-033",
+      "title": "Create League Screen",
+      "epic": "EPIC-009 — Frontend Screens",
+      "description": "Form for creating a new league.",
+      "acceptanceCriteria": [
+        "Route: /leagues/create",
+        "Authenticated users",
+        "CSR rendering",
+        "Form with all league settings",
+        "Validation on all fields"
+      ],
+      "dependencies": ["US-008"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Screen ID: SCR-012",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-034",
+      "title": "League Home & Standings",
+      "epic": "EPIC-009 — Frontend Screens",
+      "description": "League details and standings view.",
+      "acceptanceCriteria": [
+        "Route: /leagues/{id}",
+        "League members or public if visibility=public",
+        "SSR rendering",
+        "Shows standings, current race, member list"
+      ],
+      "dependencies": ["US-021"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Screen ID: SCR-013",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-035",
+      "title": "Live Draft Board Screen",
+      "epic": "EPIC-009 — Frontend Screens",
+      "description": "Real-time draft board interface.",
+      "acceptanceCriteria": [
+        "Route: /leagues/{id}/draft",
+        "League members only",
+        "CSR with WebSocket",
+        "Live updates <500ms",
+        "Driver selection with confirmation",
+        "Auto-draft preference UI",
+        "On disconnect: polling fallback"
+      ],
+      "dependencies": ["US-022"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Screen ID: SCR-014",
+      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E draft board passes"]
+    },
+    {
+      "id": "US-036",
+      "title": "League Settings & Member Management",
+      "epic": "EPIC-009 — Frontend Screens",
+      "description": "Commissioner-only league management screens.",
+      "acceptanceCriteria": [
+        "Routes: /leagues/{id}/settings, /leagues/{id}/settings/members",
+        "Commissioner only",
+        "CSR rendering",
+        "Edit league settings",
+        "Manage members, invite links, join requests"
+      ],
+      "dependencies": ["US-010"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Screen IDs: SCR-015, SCR-016",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-037",
+      "title": "User Profile & Notifications",
+      "epic": "EPIC-009 — Frontend Screens",
+      "description": "User settings and notification history.",
+      "acceptanceCriteria": [
+        "Routes: /settings/profile, /notifications",
+        "Authenticated users",
+        "SSR rendering",
+        "Profile editing",
+        "Notification history with filters"
+      ],
+      "dependencies": ["US-003", "US-025"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Screen IDs: SCR-020, SCR-021",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-038",
+      "title": "Admin Panel Screens",
+      "epic": "EPIC-009 — Frontend Screens",
+      "description": "All admin-only screens.",
+      "acceptanceCriteria": [
+        "Routes: /admin, /admin/races, /admin/races/{id}, /admin/users, /admin/settings, /admin/flags",
+        "Super admin only",
+        "SSR rendering (except race override is CSR)",
+        "All admin functions accessible"
+      ],
+      "dependencies": ["US-027", "US-028", "US-029"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "Screen IDs: SCR-030 through SCR-035",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-039",
+      "title": "API Auth Endpoints",
+      "epic": "EPIC-010 — Backend API",
+      "description": "All authentication API endpoints.",
+      "acceptanceCriteria": [
+        "POST /api/v1/auth/register (rate limit: 5/min/IP)",
+        "POST /api/v1/auth/login (rate limit: 10/min/IP, 5/15min/email)",
+        "POST /api/v1/auth/refresh",
+        "POST /api/v1/auth/logout",
+        "POST /api/v1/auth/forgot-password (3/hr/email)",
+        "POST /api/v1/auth/reset-password (5/hr/IP)",
+        "GET /api/v1/auth/verify-email (10/hr/token)"
+      ],
+      "dependencies": ["US-001", "US-002"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "API IDs: API-001 through API-007",
+      "testGates": ["TypeScript compiles", "Integration tests pass"]
+    },
+    {
+      "id": "US-040",
+      "title": "API User Endpoints",
+      "epic": "EPIC-010 — Backend API",
+      "description": "User profile and settings API endpoints.",
+      "acceptanceCriteria": [
+        "GET /api/v1/users/me",
+        "PATCH /api/v1/users/me (20/min)",
+        "POST /api/v1/users/me/email-change (3/day)",
+        "POST /api/v1/users/me/email-change/cancel (5/hr)",
+        "POST /api/v1/users/me/email-change/waive-hold (5/hr)",
+        "POST /api/v1/users/me/push-subscription (10/min)",
+        "DELETE /api/v1/users/me/push-subscription (10/min)"
+      ],
+      "dependencies": ["US-003", "US-004"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "API IDs: API-010 through API-016",
+      "testGates": ["TypeScript compiles", "Integration tests pass"]
+    },
+    {
+      "id": "US-041",
+      "title": "API F1 Data Endpoints",
+      "epic": "EPIC-010 — Backend API",
+      "description": "F1 season, race, and driver data API endpoints.",
+      "acceptanceCriteria": [
+        "GET /api/v1/seasons",
+        "GET /api/v1/seasons/{year}/races",
+        "GET /api/v1/seasons/{year}/races/{round}",
+        "GET /api/v1/seasons/{year}/drivers"
+      ],
+      "dependencies": ["US-005"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "API IDs: API-020 through API-023",
+      "testGates": ["TypeScript compiles", "Integration tests pass"]
+    },
+    {
+      "id": "US-042",
+      "title": "API League Endpoints",
+      "epic": "EPIC-010 — Backend API",
+      "description": "League management API endpoints.",
+      "acceptanceCriteria": [
+        "POST /api/v1/leagues (10/day/user)",
+        "GET /api/v1/leagues (public leagues)",
+        "GET /api/v1/users/me/leagues",
+        "GET /api/v1/leagues/{id}",
+        "PATCH /api/v1/leagues/{id} (commissioner only)",
+        "DELETE /api/v1/leagues/{id} (commissioner, 1/day)",
+        "POST /api/v1/leagues/{id}/join",
+        "POST /api/v1/leagues/{id}/leave",
+        "GET /api/v1/leagues/{id}/members",
+        "DELETE /api/v1/leagues/{id}/members/{userId}",
+        "POST /api/v1/leagues/{id}/invite-links",
+        "GET /api/v1/join/{token}",
+        "GET /api/v1/leagues/{id}/join-requests",
+        "PATCH /api/v1/leagues/{id}/join-requests/{requestId}",
+        "PATCH /api/v1/leagues/{id}/draft-order",
+        "POST /api/v1/leagues/{id}/flag"
+      ],
+      "dependencies": ["US-008", "US-009", "US-010"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "API IDs: API-030 through API-045",
+      "testGates": ["TypeScript compiles", "Integration tests pass"]
+    },
+    {
+      "id": "US-043",
+      "title": "API Draft Endpoints",
+      "epic": "EPIC-010 — Backend API",
+      "description": "Draft and pick submission API endpoints.",
+      "acceptanceCriteria": [
+        "GET /api/v1/leagues/{id}/drafts",
+        "GET /api/v1/leagues/{id}/drafts/current",
+        "POST /api/v1/drafts/{draftId}/picks",
+        "GET /api/v1/users/me/auto-draft-preferences",
+        "PUT /api/v1/users/me/auto-draft-preferences"
+      ],
+      "dependencies": ["US-011", "US-012", "US-013"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "API IDs: API-050 through API-054",
+      "testGates": ["TypeScript compiles", "Integration tests pass"]
+    },
+    {
+      "id": "US-044",
+      "title": "API Scoring & Standings Endpoints",
+      "epic": "EPIC-010 — Backend API",
+      "description": "Scoring and standings API endpoints.",
+      "acceptanceCriteria": [
+        "GET /api/v1/leagues/{id}/standings",
+        "GET /api/v1/leagues/{id}/races/{round}/scores"
+      ],
+      "dependencies": ["US-020", "US-021"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "API IDs: API-060, API-061",
+      "testGates": ["TypeScript compiles", "Integration tests pass"]
+    },
+    {
+      "id": "US-045",
+      "title": "API Notifications Endpoints",
+      "epic": "EPIC-010 — Backend API",
+      "description": "Notification management API endpoints.",
+      "acceptanceCriteria": [
+        "GET /api/v1/notifications (paginated)",
+        "PATCH /api/v1/notifications/{id}/read",
+        "POST /api/v1/notifications/read-all"
+      ],
+      "dependencies": ["US-025"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "API IDs: API-070 through API-072",
+      "testGates": ["TypeScript compiles", "Integration tests pass"]
+    },
+    {
+      "id": "US-046",
+      "title": "API Admin Endpoints",
+      "epic": "EPIC-010 — Backend API",
+      "description": "All admin-only API endpoints.",
+      "acceptanceCriteria": [
+        "GET /api/v1/admin/races, GET /api/v1/admin/races/{id}",
+        "POST /api/v1/admin/races/{id}/results",
+        "PATCH /api/v1/admin/races/{id}/results/{resultId}",
+        "POST /api/v1/admin/races/{id}/sync",
+        "GET /api/v1/admin/users, PATCH /api/v1/admin/users/{id}",
+        "GET /api/v1/admin/settings, PATCH /api/v1/admin/settings",
+        "GET /api/v1/admin/flags, PATCH /api/v1/admin/flags/{id}",
+        "GET /api/v1/admin/audit-log"
+      ],
+      "dependencies": ["US-027", "US-028", "US-029"],
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "notes": "API IDs: API-080 through API-091",
+      "testGates": ["TypeScript compiles", "Integration tests pass"]
+    },
+    {
+      "id": "US-047",
+      "title": "Background Jobs - Jolpica Sync",
+      "epic": "EPIC-011 — Background Jobs",
+      "description": "Jolpica synchronization background jobs.",
+      "acceptanceCriteria": [
+        "jolpica.sync.results: poll for race results, retry 3x with exponential backoff",
+        "jolpica.sync.season: sync season schedule weekly (Monday 02:00 UTC)"
+      ],
+      "dependencies": ["US-005", "US-006"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Queue: jolpica",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-048",
+      "title": "Background Jobs - Draft System",
+      "epic": "EPIC-011 — Background Jobs",
+      "description": "Draft-related background jobs.",
+      "acceptanceCriteria": [
+        "draft.window.open: Monday 00:00 UTC of race week",
+        "draft.window.close: at qualifying start OR all-picked",
+        "draft.pick.timeout: 24h after pick-turn-start",
+        "draft.auto_pick: on player turn start if auto-draft set"
+      ],
+      "dependencies": ["US-011", "US-013", "US-015"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Queue: draft",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    },
+    {
+      "id": "US-049",
+      "title": "Background Jobs - Scoring & Notifications",
+      "epic": "EPIC-011 — Background Jobs",
+      "description": "Scoring calculation and notification delivery jobs.",
+      "acceptanceCriteria": [
+        "scoring.calculate: after jolpica.sync.results success, retry 3x",
+        "notification.send_push: on notification create, retry 5x",
+        "notification.send_email: on notification create, retry 5x",
+        "email_change.apply: at email_change_expires_at"
+      ],
+      "dependencies": ["US-016", "US-017", "US-018", "US-023", "US-024", "US-004"],
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "notes": "Queues: scoring, notifications, users",
+      "testGates": ["TypeScript compiles", "Unit tests pass"]
+    }
+  ],
+  "ralphConfig": {
+    "stopCondition": "All userStories have passes: true AND no open data-flags",
+    "defaultBranch": "ralph/main",
+    "maxIterationsPerStory": 15
+  },
+  "fullSpecReference": "PitLane MVP: F1 fantasy platform with per-race drafting. Key features: (1) Email auth with verification, (2) Jolpica API integration for F1 data, (3) League management (2-11 players), (4) Snake/regular draft system with 24h timers, (5) 3 scoring systems (FIA, linear 20, proprietary 10th=10pts), (6) Weekly winners & season podium, (7) HTML5 push + email notifications, (8) Admin panel with data override. Tech stack: Next.js 15, Fastify 5, PostgreSQL 16, Redis 7, Prisma 5, TypeScript 5. API: REST + OpenAPI 3.1, WebSocket for live draft. Target: Q2 2026 launch, 500 MAU by end of 2026 season."
+}

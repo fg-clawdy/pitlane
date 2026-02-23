@@ -1,0 +1,99 @@
+Ralph Loop Progress - PitLane MVP
+=====================================
+Started: 2026-02-23T00:00:00Z
+
+Stories Completed: 1 / 49 (2%)
+Current Story: US-001 (completed)
+
+Progress:
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 2%
+
+Completed Stories:
+- US-001: User Registration with Email Verification ✓
+
+Pending Stories (by priority):
+- US-002: User Login with Account Lockout (Priority 1, depends on US-001)
+- US-005: Jolpica Data Import - Seasons and Races (Priority 1)
+- US-008: Create League (Priority 1, depends on US-001, US-002)
+- US-009: Join League (Priority 1, depends on US-001, US-002, US-008)
+- US-011: Draft Window Lifecycle (Priority 1)
+- US-012: Draft Pick Submission (Priority 1, depends on US-011)
+- US-016: Scoring Engine - FIA Official (Priority 1, depends on US-006)
+- US-017: Scoring Engine - Linear 20-Point (Priority 1, depends on US-006)
+- US-018: Scoring Engine - Proprietary (Priority 1, depends on US-006)
+- US-020: Weekly Winners & Season Podium (Priority 1)
+- US-021: League Standings View (Priority 1, depends on US-019, US-020)
+- US-022: Live Draft Board (WebSocket) (Priority 1, depends on US-012)
+- US-030: Landing Page (Priority 1)
+- US-031: Authentication Screens (Priority 1, depends on US-001, US-002)
+- US-032: Dashboard & League List (Priority 1)
+- US-033: Create League Screen (Priority 1, depends on US-008)
+- US-034: League Home & Standings (Priority 1, depends on US-021)
+- US-035: Live Draft Board Screen (Priority 1, depends on US-022)
+- US-039: API Auth Endpoints (Priority 1, depends on US-001, US-002)
+- US-040: API User Endpoints (Priority 1)
+- US-041: API F1 Data Endpoints (Priority 1, depends on US-005)
+- US-042: API League Endpoints (Priority 1)
+- US-043: API Draft Endpoints (Priority 1)
+- US-044: API Scoring & Standings Endpoints (Priority 1)
+- US-047: Background Jobs - Jolpica Sync (Priority 1)
+- US-048: Background Jobs - Draft System (Priority 1)
+- US-049: Background Jobs - Scoring & Notifications (Priority 1)
+
+Next Story: US-003 - User Profile Management
+
+## 2026-02-23T14:19:00Z - US-002 - User Login with Account Lockout
+
+**What was implemented:**
+- Complete authentication API with login, refresh, and logout endpoints
+- Account lockout system (5 failed attempts = 15 minute lock)
+- JWT token management with RS256 asymmetric encryption
+- Password hashing with bcrypt
+- Refresh token storage in httpOnly cookies
+- Fastify server setup with CORS and cookie support
+
+**Files changed:**
+- apps/api/prisma/schema.prisma - Added User, RefreshToken models
+- apps/api/src/lib/password.ts - Password hashing utilities
+- apps/api/src/lib/jwt.ts - JWT token generation and verification
+- apps/api/src/modules/auth/auth.controller.ts - Auth controller with login/refresh/logout
+- apps/api/src/modules/auth/auth.routes.ts - Auth routes
+- apps/api/src/modules/auth/auth.service.ts - Auth business logic
+- apps/api/src/modules/auth/types.ts - Auth types and interfaces
+- apps/api/src/index.ts - Main Fastify server
+- apps/api/package.json - API dependencies
+- apps/api/tsconfig.json - TypeScript configuration
+- apps/api/.env.example - Environment variables template
+- apps/api/README.md - API documentation
+
+**Learnings for future iterations:**
+- This codebase uses Fastify 5.x as the web framework (not Express)
+- Prisma ORM is used for database operations with PostgreSQL
+- JWT tokens use RS256 asymmetric encryption (private key for signing, public key for verification)
+- Access tokens are short-lived (15min) and stored in memory, refresh tokens are long-lived (30d) in httpOnly cookies
+- Account lockout is implemented with failed_attempts counter and locked_until timestamp
+- The API follows REST conventions with /api/v1 prefix
+- All auth endpoints are in modules/auth/ directory
+- Environment variables are managed via .env files
+- The project uses npm workspaces with apps/* structure
+
+**Gotchas encountered:**
+- Need to generate JWT keys using openssl before running the server
+- Fastify requires explicit registration of plugins like @fastify/cors and @fastify/cookie
+- Prisma client must be generated with `npm run db:generate` before running
+- Database schema must be pushed with `npm run db:push`
+- Cookie secret must be set for httpOnly cookies to work
+- CORS origin must match the frontend URL
+- npm install took longer than expected due to workspace dependencies
+
+**Useful context:**
+- The API server runs on port 3001 by default
+- Health check endpoint is at /health
+- Auth endpoints are under /api/v1/auth
+- Failed login attempts are tracked per user email
+- Lockout duration is 15 minutes (900000ms)
+- Failed attempts threshold is 5
+- All timestamps use JavaScript Date objects
+- Error responses follow a consistent format with message and optional details
+
+---
