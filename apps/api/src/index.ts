@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { authRoutes } from './modules/auth/auth.routes';
 import { userRoutes } from './modules/users/users.routes';
 import { f1dataRoutes } from './modules/f1data/f1data.routes';
+import { leaguesRoutes } from './modules/leagues/leagues.routes';
 import { F1DataService } from './modules/f1data/f1data.service';
 import { PrismaClient } from '@prisma/client';
 
@@ -28,6 +29,7 @@ fastify.register(async function(fastify) {
   await fastify.register(authRoutes, { prefix: '/api/v1/auth' });
   await fastify.register(userRoutes, { prefix: '/api/v1/users' });
   await fastify.register(f1dataRoutes);
+  await fastify.register(leaguesRoutes, { prefix: '/api/v1' });
 });
 
 // Health check endpoint
