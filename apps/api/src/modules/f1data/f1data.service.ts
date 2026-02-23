@@ -4,7 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import JolpicaClient from './jolpica-client';
+import JolpicaClient, { RaceResultSyncOutput } from './jolpica-client';
 
 export interface SyncResult {
   seasonId?: string;
@@ -17,6 +17,8 @@ export interface RaceResultSyncResult {
   resultsSynced: number;
   errors: string[];
   needsRetry: boolean;
+  discrepancies: RaceResultSyncOutput['discrepancies'];
+  raceId: string;
 }
 
 export class F1DataService {
@@ -187,7 +189,9 @@ export class F1DataService {
     const result: RaceResultSyncResult = {
       resultsSynced: 0,
       errors: [],
-      needsRetry: false
+      needsRetry: false,
+      discrepancies: [],
+      raceId: ''
     };
 
     try {
@@ -195,6 +199,8 @@ export class F1DataService {
       const syncResult = await this.jolpica.syncRaceResults(seasonYear, round);
       result.resultsSynced = syncResult.synced;
       result.errors.push(...syncResult.errors);
+      result.discrepancies = syncResult.discrepancies;
+      result.raceId = syncResult.raceId;
 
       // If no results synced and we haven't exhausted attempts, mark for retry
       if (syncResult.synced === 0 && attemptNumber < this.maxPolls) {
@@ -205,12 +211,80 @@ export class F1DataService {
         await this.triggerAdminAlert(seasonYear, round, attemptNumber);
         result.errors.push(`Max polling attempts (${this.maxPolls}) reached without results`);
       }
+      
+      // If we have discrepancies, notify commissioners
+      if (syncResult.discrepancies.length > 0) {
+        await this.notifyCommissionersOfDiscrepancies(syncResult.raceId, syncResult.discrepancies);
+      }
     } catch (error) {
       result.errors.push(`Race results poll failed: ${error}`);
       result.needsRetry = attemptNumber < this.maxPolls;
     }
 
     return result;
+  }
+
+  /**
+   * Notify league commissioners of data discrepancies
+   */
+  private async notifyCommissionersOfDiscrepancies(
+    raceId: string,
+    discrepancies: RaceResultSyncOutput['discrepancies']
+  ): Promise<void> {
+    try {
+      // Get the race with season info
+      const race = await this.prisma.race.findUnique({
+        where: { id: raceId },
+        include: { season: true }
+      });
+
+      if (!race) return;
+
+      // Find all leagues for this season
+      const leagues = await this.prisma.league.findMany({
+        where: { seasonId: race.seasonId },
+        include: {
+          members: {
+            where: { league: { /* commissioners are league creators for now */ } }
+          }
+        }
+      });
+
+      // Get unique commissioner user IDs (league creators)
+      const commissionerUserIds = new Set<string>();
+      for (const league of leagues) {
+        // Find the league creator (first member or use audit log)
+        const firstMember = await this.prisma.leagueMember.findFirst({
+          where: { leagueId: league.id },
+          orderBy: { joinedAt: 'asc' }
+        });
+        if (firstMember) {
+          commissionerUserIds.add(firstMember.userId);
+        }
+      }
+
+      // Create notifications for each commissioner
+      for (const userId of commissionerUserIds) {
+        await this.prisma.notification.create({
+          data: {
+            userId,
+            type: 'data_discrepancy',
+            title: 'Race Data Discrepancy Detected',
+            body: `${discrepancies.length} data discrepancy(ies) detected for ${race.raceName}. Jolpica data differs from admin-entered values.`,
+            data: {
+              raceId,
+              raceName: race.raceName,
+              discrepancyCount: discrepancies.length,
+              fields: discrepancies.map(d => d.field)
+            }
+          }
+        });
+      }
+
+      console.log(`[F1DataService] Notified ${commissionerUserIds.size} commissioners of ${discrepancies.length} discrepancies for race ${race.raceName}`);
+    } catch (error) {
+      console.error(`[F1DataService] Failed to notify commissioners: ${error}`);
+    }
   }
 
   /**
@@ -335,6 +409,46 @@ export class F1DataService {
     });
 
     return season?.drivers || [];
+  }
+
+  /**
+   * Get race results for a specific race
+   */
+  async getRaceResults(seasonYear: number, round: number) {
+    const season = await this.prisma.season.findUnique({
+      where: { year: seasonYear }
+    });
+
+    if (!season) return [];
+
+    const race = await this.prisma.race.findUnique({
+      where: {
+        seasonId_round: {
+          seasonId: season.id,
+          round
+        }
+      },
+      include: {
+        results: {
+          include: {
+            driver: {
+              select: {
+                id: true,
+                driverId: true,
+                code: true,
+                givenName: true,
+                familyName: true,
+                permanentNumber: true,
+                nationality: true
+              }
+            }
+          },
+          orderBy: { position: 'asc' }
+        }
+      }
+    });
+
+    return race?.results || [];
   }
 }
 

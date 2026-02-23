@@ -161,3 +161,87 @@ export async function syncCurrentSeason(_request: FastifyRequest, reply: Fastify
     });
   }
 }
+
+/**
+ * Get race results for a specific race
+ * GET /api/v1/seasons/:year/races/:round/results
+ */
+export async function getRaceResults(
+  request: FastifyRequest<{ Params: { year: string; round: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const year = parseInt(request.params.year, 10);
+    const round = parseInt(request.params.round, 10);
+
+    if (isNaN(year) || isNaN(round)) {
+      return reply.code(400).send({
+        success: false,
+        message: 'Invalid year or round parameter'
+      });
+    }
+
+    const results = await f1dataService.getRaceResults(year, round);
+    
+    return reply.send({
+      success: true,
+      data: results
+    });
+  } catch (error) {
+    console.error('Error fetching race results:', error);
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to fetch race results'
+    });
+  }
+}
+
+/**
+ * Sync race results for a specific race (admin)
+ * POST /api/v1/admin/sync-results/:year/:round
+ */
+export async function syncRaceResults(
+  request: FastifyRequest<{ Params: { year: string; round: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const year = parseInt(request.params.year, 10);
+    const round = parseInt(request.params.round, 10);
+
+    if (isNaN(year) || isNaN(round)) {
+      return reply.code(400).send({
+        success: false,
+        message: 'Invalid year or round parameter'
+      });
+    }
+
+    const result = await f1dataService.pollRaceResults(year, round, 1);
+    
+    if (result.errors.length > 0) {
+      return reply.code(207).send({
+        success: true,
+        data: {
+          resultsSynced: result.resultsSynced,
+          raceId: result.raceId,
+          discrepancies: result.discrepancies
+        },
+        warnings: result.errors
+      });
+    }
+
+    return reply.send({
+      success: true,
+      data: {
+        resultsSynced: result.resultsSynced,
+        raceId: result.raceId,
+        discrepancies: result.discrepancies
+      }
+    });
+  } catch (error) {
+    console.error('Error syncing race results:', error);
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to sync race results'
+    });
+  }
+}

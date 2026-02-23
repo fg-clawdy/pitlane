@@ -387,9 +387,9 @@
       ],
       "dependencies": [],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Jolpica Base URL: https://api.jolpi.ca/ergast/f1/",
+      "status": "done",
+      "passes": true,
+      "notes": "Jolpica Base URL: https://api.jolpi.ca/ergast/f1/ - Completed 2026-02-23",
       "testGates": ["TypeScript compiles", "Unit tests pass", "Jolpica sync job passes"]
     },
     {
@@ -406,9 +406,9 @@
       ],
       "dependencies": ["US-005"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Jolpica polling: HTTP 4xx = no retry (except 429), HTTP 5xx = retry after 2 hours",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-23. Jolpica polling: HTTP 4xx = no retry (except 429), HTTP 5xx = retry after 2 hours",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E race result import passes"]
     },
     {

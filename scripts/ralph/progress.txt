@@ -1,46 +1,79 @@
+## Codebase Patterns
+- Use Fastify 5.x as the web framework (not Express)
+- Prisma ORM for database operations with PostgreSQL
+- JWT tokens use RS256 asymmetric encryption
+- API endpoints follow REST conventions with /api/v1 prefix
+- All modules are in apps/api/src/modules/ directory
+- Environment variables managed via .env files
+- Project uses npm workspaces with apps/* structure
+- TypeScript compilation: npx tsc --project apps/api/tsconfig.json
+- Data discrepancy tracking: compare Jolpica values with admin-protected values field by field
+- Commissioner notifications use Notification model with type 'data_discrepancy'
+
 Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 1 / 49 (2%)
-Current Story: US-001 (completed)
+Stories Completed: 4 / 49 (8%)
+Current Story: US-006 (completed)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 2%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 8%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
+- US-002: User Login with Account Lockout ✓
+- US-005: Jolpica Data Import - Seasons and Races ✓
+- US-006: Jolpica Race Results Import ✓
 
 Pending Stories (by priority):
-- US-002: User Login with Account Lockout (Priority 1, depends on US-001)
-- US-005: Jolpica Data Import - Seasons and Races (Priority 1)
+- US-003: User Profile Management (Priority 2, depends on US-001, US-002)
+- US-004: Email Change with Hold Period (Priority 2, depends on US-003)
+- US-007: Admin Data Override (Priority 2, depends on US-005, US-006)
 - US-008: Create League (Priority 1, depends on US-001, US-002)
-- US-009: Join League (Priority 1, depends on US-001, US-002, US-008)
+- US-009: Join League (Priority 1, depends on US-008)
+- US-010: Commissioner League Management (Priority 2)
 - US-011: Draft Window Lifecycle (Priority 1)
 - US-012: Draft Pick Submission (Priority 1, depends on US-011)
+- US-013: Auto-Draft Preference Queue (Priority 2)
+- US-014: Driver Substitution After Draft Lock (Priority 2)
+- US-015: Missed Pick Resolution (Priority 2)
 - US-016: Scoring Engine - FIA Official (Priority 1, depends on US-006)
 - US-017: Scoring Engine - Linear 20-Point (Priority 1, depends on US-006)
 - US-018: Scoring Engine - Proprietary (Priority 1, depends on US-006)
+- US-019: Double Goose Egg (DGE) Tracking (Priority 2)
 - US-020: Weekly Winners & Season Podium (Priority 1)
 - US-021: League Standings View (Priority 1, depends on US-019, US-020)
 - US-022: Live Draft Board (WebSocket) (Priority 1, depends on US-012)
+- US-023: HTML5 Web Push Notifications (Priority 2)
+- US-024: Email Notifications via SMTP (Priority 2)
+- US-025: In-App Notification Center (Priority 2)
+- US-026: Draft Event Notifications (Priority 2)
+- US-027: Admin Dashboard (Priority 2)
+- US-028: Admin Race Data Entry (Priority 2)
+- US-029: System Configuration (Admin) (Priority 3)
 - US-030: Landing Page (Priority 1)
-- US-031: Authentication Screens (Priority 1, depends on US-001, US-002)
+- US-031: Authentication Screens (Priority 1)
 - US-032: Dashboard & League List (Priority 1)
-- US-033: Create League Screen (Priority 1, depends on US-008)
-- US-034: League Home & Standings (Priority 1, depends on US-021)
-- US-035: Live Draft Board Screen (Priority 1, depends on US-022)
-- US-039: API Auth Endpoints (Priority 1, depends on US-001, US-002)
+- US-033: Create League Screen (Priority 1)
+- US-034: League Home & Standings (Priority 1)
+- US-035: Live Draft Board Screen (Priority 1)
+- US-036: League Settings & Member Management (Priority 2)
+- US-037: User Profile & Notifications (Priority 2)
+- US-038: Admin Panel Screens (Priority 2)
+- US-039: API Auth Endpoints (Priority 1)
 - US-040: API User Endpoints (Priority 1)
-- US-041: API F1 Data Endpoints (Priority 1, depends on US-005)
+- US-041: API F1 Data Endpoints (Priority 1)
 - US-042: API League Endpoints (Priority 1)
 - US-043: API Draft Endpoints (Priority 1)
 - US-044: API Scoring & Standings Endpoints (Priority 1)
+- US-045: API Notifications Endpoints (Priority 2)
+- US-046: API Admin Endpoints (Priority 2)
 - US-047: Background Jobs - Jolpica Sync (Priority 1)
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-003 - User Profile Management
+Next Story: US-003 or US-008 (both Priority 1/2 with met dependencies)
 
 ## 2026-02-23T14:19:00Z - US-002 - User Login with Account Lockout
 
@@ -95,5 +128,91 @@ Next Story: US-003 - User Profile Management
 - Failed attempts threshold is 5
 - All timestamps use JavaScript Date objects
 - Error responses follow a consistent format with message and optional details
+
+---
+
+## 2026-02-23T16:09:00Z - US-005 - Jolpica Data Import - Seasons and Races
+
+**What was implemented:**
+- Jolpica API client for F1 data (https://api.jolpi.ca/ergast/f1/)
+- Season sync on app startup for current year
+- Race sync with round, raceName, Circuit, date, time
+- Driver sync with driverId, permanentNumber, code, givenName, familyName, nationality, dateOfBirth
+- Race result polling logic (3 hours post-race start, every 2 hours, max 18 polls)
+- Admin alert creation when max polls reached without results
+- F1 data API endpoints: GET /seasons, GET /seasons/:year/races, GET /seasons/:year/races/:round, GET /seasons/:year/drivers
+- Admin sync endpoint: POST /admin/sync
+
+**Files changed:**
+- apps/api/src/modules/f1data/jolpica-client.ts - Jolpica API client with fetch methods and sync logic
+- apps/api/src/modules/f1data/f1data.service.ts - F1 data service with polling/retry logic
+- apps/api/src/modules/f1data/f1data.controller.ts - HTTP handlers for F1 data endpoints
+- apps/api/src/modules/f1data/f1data.routes.ts - Fastify routes for F1 data
+- apps/api/src/index.ts - Updated to register F1 data routes and sync on startup
+- apps/api/src/lib/auth.ts - Auth middleware for protected routes
+- apps/api/src/modules/users/users.controller.ts - User profile handlers
+- apps/api/src/modules/users/users.service.ts - User profile service
+- apps/api/src/modules/users/users.routes.ts - User profile routes
+- apps/api/src/modules/users/types.ts - TypeScript interfaces
+- apps/api/tsconfig.json - Disabled noUnusedLocals/noUnusedParameters
+
+**Learnings for future iterations:**
+- Jolpica API base URL: https://api.jolpi.ca/ergast/f1/
+- Jolpica response format: MRData wrapper with specific table names (RaceTable, DriverTable, etc.)
+- Current F1 season year is determined by checking if we're in Jan-Feb (use previous year) or March+ (current year)
+- Race results polling config is stored in SystemSetting table (jolpica_poll_start_hours_after_race, jolpica_poll_interval_hours, jolpica_max_polls)
+- Admin alerts are created as AuditLog entries with action 'jolpica_poll_failed'
+- F1 data module is in modules/f1data/ directory
+- TypeScript compile command from root: npx tsc --project apps/api/tsconfig.json
+
+**Gotchas encountered:**
+- Pre-existing files had syntax errors (auth.ts, users.controller.ts, users.service.ts, users.routes.ts) that needed fixing
+- Jolpica returns strings for all numeric values (position, points, round) - must parse to int/float
+- Race time is in UTC format "HH:MM:SSZ" - needs parsing
+- Prisma Json type requires proper serialization (JSON.parse(JSON.stringify(result)))
+- tsconfig noUnusedLocals was causing issues with generic type parameters
+
+**Useful context:**
+- Season sync automatically creates season if not exists
+- Race and driver sync uses upsert to handle both create and update
+- Admin protected results are not overwritten by Jolpica sync
+- Data discrepancies are logged when admin override exists
+- Fastify route handlers use { preHandler: authenticate } for protected routes
+- F1 data endpoints are public (no auth required)
+- Admin sync endpoint is open for now (should add auth later)
+
+---
+
+## 2026-02-23T16:24:00Z - US-006 - Jolpica Race Results Import
+
+**What was implemented:**
+- Race results sync with position, Driver, Constructor, points, status, Time, FastestLap
+- Admin override field preservation when Jolpica data differs
+- Data discrepancy records creation for position, points, status, fastestLap fields
+- Commissioner notification when data discrepancies detected
+- Race results API endpoint: GET /seasons/:year/races/:round/results
+- Admin sync race results endpoint: POST /admin/sync-results/:year/:round
+
+**Files changed:**
+- apps/api/src/modules/f1data/jolpica-client.ts - Enhanced syncRaceResults with discrepancy tracking
+- apps/api/src/modules/f1data/f1data.service.ts - Added notifyCommissionersOfDiscrepancies, getRaceResults
+- apps/api/src/modules/f1data/f1data.controller.ts - Added getRaceResults, syncRaceResults handlers
+- apps/api/src/modules/f1data/f1data.routes.ts - Added results routes
+
+**Learnings for future iterations:**
+- Data discrepancy tracking compares each field individually (position, points, status, fastestLap)
+- Commissioner notifications use Notification model with type 'data_discrepancy'
+- RaceResultSyncOutput interface includes discrepancies array for tracking
+- League creators (first members) are considered commissioners for notifications
+- jolpicaValue on RaceResult stores the complete Jolpica response for audit
+
+**Gotchas encountered:**
+- Need to handle case where race has no leagues (no commissioners to notify)
+- Must return raceId from syncRaceResults for downstream processing
+
+**Useful context:**
+- Discrepancy notification includes raceId, raceName, discrepancyCount, and affected fields
+- Admin protected results are skipped during sync but discrepancies are logged
+- TypeScript compiles successfully with all changes
 
 ---

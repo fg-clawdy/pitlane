@@ -9,7 +9,9 @@ import {
   getRacesBySeason,
   getRace,
   getDriversBySeason,
-  syncCurrentSeason
+  syncCurrentSeason,
+  getRaceResults,
+  syncRaceResults
 } from './f1data.controller';
 
 export async function f1dataRoutes(fastify: FastifyInstance) {
@@ -22,9 +24,15 @@ export async function f1dataRoutes(fastify: FastifyInstance) {
   // Get a specific race
   fastify.get('/seasons/:year/races/:round', getRace);
 
+  // Get race results
+  fastify.get('/seasons/:year/races/:round/results', getRaceResults);
+
   // Get drivers for a season
   fastify.get('/seasons/:year/drivers', getDriversBySeason);
 
   // Admin sync endpoint
   fastify.post('/admin/sync', syncCurrentSeason);
+
+  // Admin sync race results endpoint
+  fastify.post('/admin/sync-results/:year/:round', syncRaceResults);
 }

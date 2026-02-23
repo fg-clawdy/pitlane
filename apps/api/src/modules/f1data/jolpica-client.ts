@@ -104,6 +104,18 @@ export interface JolpicaResponse<T> {
   };
 }
 
+export interface RaceResultSyncOutput {
+  synced: number;
+  errors: string[];
+  discrepancies: Array<{
+    raceResultId: string;
+    field: string;
+    jolpicaValue: unknown;
+    adminValue: unknown;
+  }>;
+  raceId: string;
+}
+
 export class JolpicaClient {
   private baseUrl: string;
   private prisma: PrismaClient;
@@ -297,9 +309,11 @@ export class JolpicaClient {
   /**
    * Sync race results for a specific race
    */
-  async syncRaceResults(seasonYear: number, round: number): Promise<{ synced: number; errors: string[] }> {
+  async syncRaceResults(seasonYear: number, round: number): Promise<RaceResultSyncOutput> {
     const errors: string[] = [];
+    const discrepancies: Array<{ raceResultId: string; field: string; jolpicaValue: unknown; adminValue: unknown }> = [];
     let synced = 0;
+    let raceId = '';
 
     // Get the race
     const season = await this.prisma.season.findUnique({
@@ -313,10 +327,11 @@ export class JolpicaClient {
 
     if (!season || season.races.length === 0) {
       errors.push(`Race not found: ${seasonYear} round ${round}`);
-      return { synced, errors };
+      return { synced, errors, discrepancies, raceId };
     }
 
     const race = season.races[0];
+    raceId = race.id;
 
     // Fetch results from Jolpica
     const results = await this.getRaceResults(seasonYear, round);
@@ -348,17 +363,82 @@ export class JolpicaClient {
           }
         });
 
-        // If admin protected, skip update
+        // If admin protected, compare and log discrepancies
         if (existingResult?.adminProtected) {
-          // Log discrepancy
-          await this.prisma.dataDiscrepancy.create({
-            data: {
-              raceResultId: existingResult.id,
+          const jolpicaPosition = parseInt(result.position, 10);
+          const jolpicaPoints = parseFloat(result.points);
+          const jolpicaStatus = result.status;
+          const jolpicaFastestLap = result.FastestLap?.rank === '1';
+          
+          // Check each field for discrepancies
+          if (existingResult.position !== jolpicaPosition) {
+            const discrepancy = await this.prisma.dataDiscrepancy.create({
+              data: {
+                raceResultId: existingResult.id,
+                field: 'position',
+                jolpicaValue: jolpicaPosition,
+                adminValue: existingResult.position,
+              }
+            });
+            discrepancies.push({
+              raceResultId: discrepancy.raceResultId,
               field: 'position',
-              jolpicaValue: parseInt(result.position, 10),
+              jolpicaValue: jolpicaPosition,
               adminValue: existingResult.position,
-            }
-          });
+            });
+          }
+          
+          if (existingResult.points !== jolpicaPoints) {
+            const discrepancy = await this.prisma.dataDiscrepancy.create({
+              data: {
+                raceResultId: existingResult.id,
+                field: 'points',
+                jolpicaValue: jolpicaPoints,
+                adminValue: existingResult.points,
+              }
+            });
+            discrepancies.push({
+              raceResultId: discrepancy.raceResultId,
+              field: 'points',
+              jolpicaValue: jolpicaPoints,
+              adminValue: existingResult.points,
+            });
+          }
+          
+          if (existingResult.status !== jolpicaStatus) {
+            const discrepancy = await this.prisma.dataDiscrepancy.create({
+              data: {
+                raceResultId: existingResult.id,
+                field: 'status',
+                jolpicaValue: jolpicaStatus,
+                adminValue: existingResult.status,
+              }
+            });
+            discrepancies.push({
+              raceResultId: discrepancy.raceResultId,
+              field: 'status',
+              jolpicaValue: jolpicaStatus,
+              adminValue: existingResult.status,
+            });
+          }
+          
+          if (existingResult.fastestLap !== jolpicaFastestLap) {
+            const discrepancy = await this.prisma.dataDiscrepancy.create({
+              data: {
+                raceResultId: existingResult.id,
+                field: 'fastestLap',
+                jolpicaValue: jolpicaFastestLap,
+                adminValue: existingResult.fastestLap,
+              }
+            });
+            discrepancies.push({
+              raceResultId: discrepancy.raceResultId,
+              field: 'fastestLap',
+              jolpicaValue: jolpicaFastestLap,
+              adminValue: existingResult.fastestLap,
+            });
+          }
+          
           continue;
         }
 
@@ -396,7 +476,7 @@ export class JolpicaClient {
       }
     }
 
-    return { synced, errors };
+    return { synced, errors, discrepancies, raceId };
   }
 }
 
