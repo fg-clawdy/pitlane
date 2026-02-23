@@ -14,26 +14,25 @@ Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 4 / 49 (8%)
-Current Story: US-006 (completed)
+Stories Completed: 6 / 49 (12%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 8%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 12%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
 - US-002: User Login with Account Lockout ✓
 - US-005: Jolpica Data Import - Seasons and Races ✓
 - US-006: Jolpica Race Results Import ✓
+- US-008: Create League ✓
+- US-009: Join League ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
 - US-004: Email Change with Hold Period (Priority 2, depends on US-003)
 - US-007: Admin Data Override (Priority 2, depends on US-005, US-006)
-- US-008: Create League (Priority 1, depends on US-001, US-002)
-- US-009: Join League (Priority 1, depends on US-008)
-- US-010: Commissioner League Management (Priority 2)
-- US-011: Draft Window Lifecycle (Priority 1)
+- US-010: Commissioner League Management (Priority 2, depends on US-008, US-009)
+- US-011: Draft Window Lifecycle (Priority 1, depends on US-008, US-009)
 - US-012: Draft Pick Submission (Priority 1, depends on US-011)
 - US-013: Auto-Draft Preference Queue (Priority 2)
 - US-014: Driver Substitution After Draft Lock (Priority 2)
@@ -73,7 +72,7 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-003 or US-008 (both Priority 1/2 with met dependencies)
+Next Story: US-016/017/018 (Scoring Engines) or US-011 (Draft Window Lifecycle) - all Priority 1 with met dependencies
 
 ## 2026-02-23T14:19:00Z - US-002 - User Login with Account Lockout
 
@@ -213,6 +212,101 @@ Next Story: US-003 or US-008 (both Priority 1/2 with met dependencies)
 **Useful context:**
 - Discrepancy notification includes raceId, raceName, discrepancyCount, and affected fields
 - Admin protected results are skipped during sync but discrepancies are logged
+- TypeScript compiles successfully with all changes
+
+---
+
+## 2026-02-23T17:10:00Z - US-009 - Join League
+
+**What was implemented:**
+- Join league directly (public leagues or via invite link)
+- Invite link system with 8-char random tokens, 7-day expiry, one-time use per user
+- Join request/approval flow for leagues requiring approval
+- Leave league functionality (commissioner cannot leave)
+- Member removal by commissioner
+- Team name validation (1-50 chars, unique within league)
+- Mid-season join cutoff (cannot join after 3 races completed)
+- User league limit enforcement (max 10 leagues per user)
+- Commissioner join request management (approve/reject)
+- Invite link management (create, list)
+
+**Files changed:**
+- apps/api/src/modules/leagues/types.ts - Added JoinLeagueInput, JoinRequestResponse, InviteLinkResponse, JoinViaInviteResponse
+- apps/api/src/modules/leagues/leagues.service.ts - Added joinLeague, joinViaInviteToken, leaveLeague, createInviteLink, getInviteLinks, getJoinRequests, resolveJoinRequest, getLeagueMembers, removeMember, getLeagueByInviteToken methods
+- apps/api/src/modules/leagues/leagues.controller.ts - Added handlers for all new endpoints
+- apps/api/src/modules/leagues/leagues.routes.ts - Added routes for join, leave, invite links, members, join requests
+
+**Learnings for future iterations:**
+- Invite tokens are 8 hex characters generated with crypto.randomBytes(4)
+- Commissioner is determined by first member (members[0] ordered by joinedAt)
+- System settings control invite_link_expiry_days (default 7) and max_join_cutoff_races (default 3)
+- Invite links track uses via InviteLinkUse table (one-time use per user)
+- Join requests use upsert to handle re-requests after rejection
+- League members are soft-deleted via leftAt timestamp (historical picks retained)
+- Team name uniqueness is per league, not global
+
+**Gotchas encountered:**
+- Commissioner cannot leave their own league - must transfer role or delete league
+- Must check both invite link validity AND league status (full, mid-season) before allowing join
+- Join approval creates a pending request, not immediate membership
+- Private leagues can only be joined via invite link, public leagues allow direct join
+
+**Useful context:**
+- API endpoints:
+  - POST /api/v1/leagues/:id/join - Join league directly
+  - POST /api/v1/leagues/:id/leave - Leave league
+  - GET /api/v1/join/:token - Preview league from invite link
+  - POST /api/v1/join/:token - Join via invite link
+  - POST /api/v1/leagues/:id/invite-links - Create invite link (commissioner)
+  - GET /api/v1/leagues/:id/invite-links - List invite links (commissioner)
+  - GET /api/v1/leagues/:id/members - Get league members
+  - DELETE /api/v1/leagues/:id/members/:memberId - Remove member (commissioner)
+  - GET /api/v1/leagues/:id/join-requests - List join requests (commissioner)
+  - PATCH /api/v1/leagues/:id/join-requests/:requestId - Approve/reject request (commissioner)
+- TypeScript compiles successfully with all changes
+
+---
+
+## 2026-02-23T16:38:00Z - US-008 - Create League
+
+**What was implemented:**
+- League creation API with full settings support
+- Commissioner assignment (first member of league)
+- League name uniqueness validation per season
+- Max players validation (2-11 players)
+- User league limit enforcement (max 10 leagues per user)
+- Default team name from user profile
+- Public/Private league visibility
+- Get public leagues endpoint for discovery
+- Get user's leagues endpoint
+- Get league by ID endpoint with visibility checks
+
+**Files changed:**
+- apps/api/src/modules/leagues/types.ts - League types and interfaces
+- apps/api/src/modules/leagues/leagues.service.ts - League business logic
+- apps/api/src/modules/leagues/leagues.controller.ts - HTTP handlers for league endpoints
+- apps/api/src/modules/leagues/leagues.routes.ts - Fastify routes for leagues
+- apps/api/src/index.ts - Added leagues routes registration
+
+**Learnings for future iterations:**
+- Commissioner is determined by first member (members[0]) in the league
+- League name must be unique per season (seasonId_name unique constraint)
+- Max players is 2-11 (22 F1 drivers ÷ 2 per player)
+- Users can be members of up to 10 leagues simultaneously
+- League module is in modules/leagues/ directory
+- Route handlers cast request body/params to avoid Fastify generic type issues
+
+**Gotchas encountered:**
+- Fastify route handler generics cause type errors - cast request body/params with `as` keyword
+- Must use `!!` for boolean coercion when checking commissioner status
+- Private leagues require auth check before returning data
+
+**Useful context:**
+- League settings: scoringType, draftType, visibility, joinApprovalRequired, targetPlayers, maxPlayers, missedPickResolution, substitutionPolicy, draftOrderRandomized
+- Default scoring type is 'proprietary' (10th=10pts system)
+- Default draft type is 'snake'
+- Default visibility is 'private'
+- Team name defaults to user's defaultTeamName or generated from user ID
 - TypeScript compiles successfully with all changes
 
 ---

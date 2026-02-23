@@ -41,11 +41,114 @@ async function getUserLeaguesHandler(request: FastifyRequest, reply: FastifyRepl
 }
 
 /**
+ * POST /api/v1/leagues/:id/join
+ * Join a league directly (authenticated)
+ */
+async function joinLeagueHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.joinLeague(request, reply);
+}
+
+/**
+ * POST /api/v1/leagues/:id/leave
+ * Leave a league (authenticated)
+ */
+async function leaveLeagueHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.leaveLeague(request, reply);
+}
+
+/**
+ * GET /api/v1/join/:token
+ * Get league by invite token (public)
+ */
+async function getLeagueByInviteTokenHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.getLeagueByInviteToken(request, reply);
+}
+
+/**
+ * POST /api/v1/join/:token
+ * Join league via invite token (authenticated)
+ */
+async function joinViaInviteTokenHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.joinViaInviteToken(request, reply);
+}
+
+/**
+ * POST /api/v1/leagues/:id/invite-links
+ * Create invite link (authenticated, commissioner)
+ */
+async function createInviteLinkHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.createInviteLink(request, reply);
+}
+
+/**
+ * GET /api/v1/leagues/:id/invite-links
+ * Get invite links (authenticated, commissioner)
+ */
+async function getInviteLinksHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.getInviteLinks(request, reply);
+}
+
+/**
+ * GET /api/v1/leagues/:id/members
+ * Get league members (public)
+ */
+async function getLeagueMembersHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.getLeagueMembers(request, reply);
+}
+
+/**
+ * DELETE /api/v1/leagues/:id/members/:memberId
+ * Remove member from league (authenticated, commissioner)
+ */
+async function removeMemberHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.removeMember(request, reply);
+}
+
+/**
+ * GET /api/v1/leagues/:id/join-requests
+ * Get join requests (authenticated, commissioner)
+ */
+async function getJoinRequestsHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.getJoinRequests(request, reply);
+}
+
+/**
+ * PATCH /api/v1/leagues/:id/join-requests/:requestId
+ * Approve/reject join request (authenticated, commissioner)
+ */
+async function resolveJoinRequestHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.resolveJoinRequest(request, reply);
+}
+
+/**
  * Register league routes
  */
 export async function leaguesRoutes(fastify: FastifyInstance): Promise<void> {
+  // League CRUD
   fastify.post('/leagues', { preHandler: authenticate }, createLeagueHandler);
   fastify.get('/leagues', getPublicLeaguesHandler);
   fastify.get('/leagues/:id', getLeagueHandler);
+  
+  // User's leagues
   fastify.get('/users/me/leagues', { preHandler: authenticate }, getUserLeaguesHandler);
+  
+  // Join/Leave league
+  fastify.post('/leagues/:id/join', { preHandler: authenticate }, joinLeagueHandler);
+  fastify.post('/leagues/:id/leave', { preHandler: authenticate }, leaveLeagueHandler);
+  
+  // Invite links (join via token)
+  fastify.get('/join/:token', getLeagueByInviteTokenHandler);
+  fastify.post('/join/:token', { preHandler: authenticate }, joinViaInviteTokenHandler);
+  
+  // Commissioner: invite link management
+  fastify.post('/leagues/:id/invite-links', { preHandler: authenticate }, createInviteLinkHandler);
+  fastify.get('/leagues/:id/invite-links', { preHandler: authenticate }, getInviteLinksHandler);
+  
+  // League members
+  fastify.get('/leagues/:id/members', getLeagueMembersHandler);
+  fastify.delete('/leagues/:id/members/:memberId', { preHandler: authenticate }, removeMemberHandler);
+  
+  // Commissioner: join request management
+  fastify.get('/leagues/:id/join-requests', { preHandler: authenticate }, getJoinRequestsHandler);
+  fastify.patch('/leagues/:id/join-requests/:requestId', { preHandler: authenticate }, resolveJoinRequestHandler);
 }

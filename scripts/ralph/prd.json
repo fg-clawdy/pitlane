@@ -446,9 +446,9 @@
       ],
       "dependencies": ["US-001", "US-002"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "League size: 2-11 players (22 F1 drivers ÷ 2)",
+      "status": "done",
+      "passes": true,
+      "notes": "League size: 2-11 players (22 F1 drivers ÷ 2). Completed 2026-02-23. Draft order randomization pending draft system implementation.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E create league passes"]
     },
     {
@@ -467,9 +467,9 @@
       ],
       "dependencies": ["US-001", "US-002", "US-008"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Team name pre-filled from user.default_team_name",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-23. Includes invite link system, join request approval flow, leave league, and member removal.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E join league passes"]
     },
     {

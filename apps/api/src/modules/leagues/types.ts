@@ -58,3 +58,34 @@ export interface LeagueFilter {
   seasonId?: string;
   hasSpace?: boolean;
 }
+
+export interface JoinLeagueInput {
+  teamName: string;
+}
+
+export interface JoinRequestResponse {
+  id: string;
+  leagueId: string;
+  userId: string;
+  teamName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface InviteLinkResponse {
+  id: string;
+  leagueId: string;
+  token: string;
+  expiresAt: Date;
+  maxUses: number | null;
+  usesCount: number;
+  createdAt: Date;
+}
+
+export interface JoinViaInviteResponse {
+  league: LeagueResponse;
+  requiresApproval: boolean;
+  joinRequest?: JoinRequestResponse;
+  joined?: boolean;
+}
