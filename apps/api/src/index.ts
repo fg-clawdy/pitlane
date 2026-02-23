@@ -1,5 +1,12 @@
 import Fastify from 'fastify';
 import { authRoutes } from './modules/auth/auth.routes';
+import { userRoutes } from './modules/users/users.routes';
+import { f1dataRoutes } from './modules/f1data/f1data.routes';
+import { F1DataService } from './modules/f1data/f1data.service';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+const f1dataService = new F1DataService(prisma);
 
 const fastify = Fastify({
   logger: true,
@@ -16,9 +23,11 @@ fastify.register(require('@fastify/cookie'), {
   secret: process.env.COOKIE_SECRET || 'pitlane-cookie-secret',
 });
 
-// Register auth routes under /api/v1/auth
-fastify.register(async function (fastify) {
+// Register routes under /api/v1
+fastify.register(async function(fastify) {
   await fastify.register(authRoutes, { prefix: '/api/v1/auth' });
+  await fastify.register(userRoutes, { prefix: '/api/v1/users' });
+  await fastify.register(f1dataRoutes);
 });
 
 // Health check endpoint
@@ -27,17 +36,24 @@ fastify.get('/health', async (_request, _reply) => {
 });
 
 // Start server
-const start = async () => {
+async function start() {
   try {
+    // Sync current season data on startup
+    console.log('Syncing current F1 season data...');
+    const syncResult = await f1dataService.syncCurrentSeason();
+    console.log(`Sync complete: ${syncResult.racesSynced} races, ${syncResult.driversSynced} drivers`);
+    if (syncResult.errors.length > 0) {
+      console.warn('Sync warnings:', syncResult.errors);
+    }
+
     const port = parseInt(process.env.PORT || '3001', 10);
     const host = process.env.HOST || '0.0.0.0';
-    
     await fastify.listen({ port, host });
     console.log(`Server listening on ${host}:${port}`);
-  } catch (err) {
+  } catch(err) {
     fastify.log.error(err);
     process.exit(1);
   }
-};
+}
 
 start();
