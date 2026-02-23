@@ -5,8 +5,8 @@ const ACCESS_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
 const REFRESH_TOKEN_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 
 // Get JWT keys from environment variables
-const JWT_PRIVATE_KEY = process.env.JWT_PRIVATE_KEY;
-const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY;
+const JWT_PRIVATE_KEY = process.env.JWT_PRIVATE_KEY!;
+const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY!;
 
 if (!JWT_PRIVATE_KEY || !JWT_PUBLIC_KEY) {
   throw new Error('JWT_PRIVATE_KEY and JWT_PUBLIC_KEY environment variables must be set');

@@ -21,7 +21,7 @@ export async function loginHandler(
     const refreshTokenExpiry = new Date();
     refreshTokenExpiry.setDate(refreshTokenExpiry.getDate() + 30);
 
-    reply.setCookie('refreshToken', result.accessToken, {
+    (reply as any).setCookie('refreshToken', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -50,7 +50,7 @@ export async function refreshHandler(
 ): Promise<void> {
   try {
     // Get refresh token from cookie
-    const refreshToken = request.cookies.refreshToken;
+    const refreshToken = (request as any).cookies.refreshToken;
 
     if (!refreshToken) {
       reply.status(401).send({ error: 'No refresh token provided' });
@@ -80,14 +80,14 @@ export async function logoutHandler(
 ): Promise<void> {
   try {
     // Get refresh token from cookie
-    const refreshToken = request.cookies.refreshToken;
+    const refreshToken = (request as any).cookies.refreshToken;
 
     if (refreshToken) {
       await logout(refreshToken);
     }
 
     // Clear refresh token cookie
-    reply.clearCookie('refreshToken', {
+    (reply as any).clearCookie('refreshToken', {
       path: '/',
     });
 

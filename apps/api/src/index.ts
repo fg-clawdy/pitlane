@@ -22,7 +22,7 @@ fastify.register(async function (fastify) {
 });
 
 // Health check endpoint
-fastify.get('/health', async (request, reply) => {
+fastify.get('/health', async (_request, _reply) => {
   return { status: 'ok', timestamp: new Date().toISOString() };
 });
 

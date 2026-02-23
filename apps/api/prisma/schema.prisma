@@ -113,6 +113,7 @@ model Season {
 
   races     Race[]
   drivers   Driver[]
+  leagues   League[]
 }
 
 model Race {
@@ -228,6 +229,7 @@ model League {
   inviteLinks             InviteLink[]
   joinRequests            JoinRequest[]
   commissionerFlags       CommissionerFlag[]
+  raceScores              RaceScore[]
 
   @@unique([seasonId, name])
   @@index([seasonId])
