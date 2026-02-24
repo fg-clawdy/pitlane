@@ -509,9 +509,9 @@
       ],
       "dependencies": ["US-008", "US-009"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Draft order rotation: after each race, position N moves to N+1, last moves to 1",
+      "status": "done",
+      "passes": true,
+      "notes": "Draft order rotation: after each race, position N moves to N+1, last moves to 1. Completed 2026-02-23. Draft window opens Monday of race week, closes at qualifying start. 24h turn timer implemented. Snake and regular draft both supported.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E draft flow passes"]
     },
     {
@@ -627,9 +627,9 @@
       ],
       "dependencies": ["US-006"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Linear decline from 20 to 1",
+      "status": "done",
+      "passes": true,
+      "notes": "Implemented together with US-016. LINEAR_20_SCORING_TABLE in types.ts.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -647,9 +647,9 @@
       ],
       "dependencies": ["US-006"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Default scoring system for MVP",
+      "status": "done",
+      "passes": true,
+      "notes": "Implemented together with US-016. PROPRIETARY_SCORING_TABLE in types.ts.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
