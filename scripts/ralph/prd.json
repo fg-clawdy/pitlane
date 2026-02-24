@@ -706,9 +706,9 @@
       ],
       "dependencies": ["US-019", "US-020"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Visibility: public or private controlled by commissioner",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-24. Added standings-view endpoint with current week draft status, member race history endpoint with driver picks/scores.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E standings view passes"]
     },
     {

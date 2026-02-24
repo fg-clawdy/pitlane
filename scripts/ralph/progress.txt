@@ -1,5 +1,9 @@
 ## Codebase Patterns
 - Use Fastify 5.x as the web framework (not Express)
+- LeagueStandingsView interface consolidates standings, draft status, and league info
+- MemberRaceHistory provides race-by-race detail with driver picks and scores
+- CurrentWeekDraftStatus shows who has picked and timer remaining
+- Standings include rank, username, displayName for richer display
 - Prisma ORM for database operations with PostgreSQL
 - JWT tokens use RS256 asymmetric encryption
 - API endpoints follow REST conventions with /api/v1 prefix
@@ -17,10 +21,10 @@ Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 13 / 49 (27%)
+Stories Completed: 14 / 49 (29%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░] 27%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░] 29%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -36,6 +40,7 @@ Completed Stories:
 - US-018: Scoring Engine - Proprietary ✓
 - US-019: Double Goose Egg (DGE) Tracking ✓
 - US-020: Weekly Winners & Season Podium ✓
+- US-021: League Standings View ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
@@ -45,7 +50,6 @@ Pending Stories (by priority):
 - US-013: Auto-Draft Preference Queue (Priority 2)
 - US-014: Driver Substitution After Draft Lock (Priority 2)
 - US-015: Missed Pick Resolution (Priority 2)
-- US-021: League Standings View (Priority 1, depends on US-019, US-020)
 - US-022: Live Draft Board (WebSocket) (Priority 1, depends on US-012)
 - US-023: HTML5 Web Push Notifications (Priority 2)
 - US-024: Email Notifications via SMTP (Priority 2)
@@ -75,7 +79,51 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-021 (League Standings View) - Priority 1 with met dependencies
+Next Story: US-022 (Live Draft Board WebSocket) - Priority 1 with met dependencies
+
+---
+
+## 2026-02-24T09:48:00Z - US-021 - League Standings View
+
+**What was implemented:**
+- Enhanced StandingsEntry type with rank, username, displayName fields
+- Added LeagueStandingsView interface consolidating standings with league info and current week draft status
+- Added MemberRaceHistory interface for race-by-race detail with driver picks and scores
+- Added CurrentWeekDraftStatus interface showing who has picked and timer remaining
+- New endpoint: GET /api/v1/leagues/:id/standings-view - complete standings view with draft status
+- New endpoint: GET /api/v1/leagues/:id/members/:memberId/history - member's race history with driver details
+- Standings now include rank position for easier display
+- Current week shows draft status, pick progress per member, and turn expiry
+
+**Files changed:**
+- apps/api/src/modules/scoring/types.ts - Added LeagueStandingsView, MemberRaceHistory, CurrentWeekDraftStatus interfaces
+- apps/api/src/modules/scoring/scoring.service.ts - Added getLeagueStandingsView, getMemberRaceHistory, getCurrentWeekDraftStatus methods
+- apps/api/src/modules/scoring/scoring.controller.ts - Added handlers for new endpoints
+- apps/api/src/modules/scoring/scoring.routes.ts - Added routes for standings-view and member history
+
+**Acceptance Criteria Met:**
+- Season standings table: rank, team name, username, total points, weekly wins, DGE count ✓
+- Race-by-race history: expandable rows showing picks, scores, weekly winner ✓ (via member history endpoint)
+- Current week: draft status, who has picked, timer remaining ✓ (via currentWeek in standings-view)
+- All historical data visible to all members ✓
+- Public visibility controlled by commissioner setting ✓ (visibility field in response)
+
+**Learnings for future iterations:**
+- LeagueStandingsView consolidates all data needed for the standings page in one call
+- MemberRaceHistory includes driver details (code, name) for each pick
+- CurrentWeekDraftStatus.pickedMembers shows pick status per member per round
+- Turn expiry calculation accounts for 24h timer from last pick or window open
+
+**Gotchas encountered:**
+- Prisma types need casting when including isDGE field from RaceScore
+- submittedAt on DraftPick can be null, need null-safe comparison
+
+**Useful context:**
+- API endpoints:
+  - GET /api/v1/leagues/:id/standings - Basic standings
+  - GET /api/v1/leagues/:id/standings-view - Full view with draft status
+  - GET /api/v1/leagues/:id/members/:memberId/history - Race history with driver details
+- TypeScript compiles successfully with all changes
 
 ---
 
