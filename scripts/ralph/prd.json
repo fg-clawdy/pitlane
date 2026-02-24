@@ -892,24 +892,24 @@
       "notes": "Completed 2026-02-24. SSG by default via Next.js App Router. Includes hero section, features grid, how-it-work steps, and CTA.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E landing page loads"]
     },
-    {
-      "id": "US-031",
-      "title": "Authentication Screens",
-      "epic": "EPIC-009 — Frontend Screens",
-      "description": "Login, registration, password reset flows.",
-      "acceptanceCriteria": [
-        "Routes: /signup, /login, /forgot-password, /reset-password",
-        "Unauthenticated users only",
-        "SSR rendering",
-        "Client-side validation"
-      ],
-      "dependencies": ["US-001", "US-002"],
-      "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Screen IDs: SCR-002, SCR-003, SCR-004, SCR-005, SCR-006",
-      "testGates": ["TypeScript compiles", "Unit tests pass", "E2E auth screens pass"]
-    },
+{
+  "id": "US-031",
+  "title": "Authentication Screens",
+  "epic": "EPIC-009 — Frontend Screens",
+  "description": "Login, registration, password reset flows.",
+  "acceptanceCriteria": [
+    "Routes: /signup, /login, /forgot-password, /reset-password",
+    "Unauthenticated users only",
+    "SSR rendering",
+    "Client-side validation"
+  ],
+  "dependencies": ["US-001", "US-002"],
+  "priority": 1,
+  "status": "done",
+  "passes": true,
+  "notes": "Completed 2026-02-24. All routes implemented with react-hook-form + zod validation. Auth layout in (auth) route group.",
+  "testGates": ["TypeScript compiles", "Unit tests pass", "E2E auth screens pass"]
+},
     {
       "id": "US-032",
       "title": "Dashboard & League List",

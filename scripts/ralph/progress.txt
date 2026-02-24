@@ -22,10 +22,10 @@ Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 16 / 49 (33%)
+Stories Completed: 17 / 49 (35%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░] 33%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░] 35%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -44,6 +44,7 @@ Completed Stories:
 - US-021: League Standings View ✓
 - US-022: Live Draft Board (WebSocket) ✓
 - US-030: Landing Page ✓
+- US-031: Authentication Screens ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
@@ -60,7 +61,6 @@ Pending Stories (by priority):
 - US-027: Admin Dashboard (Priority 2)
 - US-028: Admin Race Data Entry (Priority 2)
 - US-029: System Configuration (Admin) (Priority 3)
-- US-031: Authentication Screens (Priority 1)
 - US-032: Dashboard & League List (Priority 1)
 - US-033: Create League Screen (Priority 1)
 - US-034: League Home & Standings (Priority 1)
@@ -80,7 +80,52 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-031 (Authentication Screens) - Priority 1
+Next Story: US-032 (Dashboard & League List) - Priority 1
+
+---
+
+## 2026-02-24T15:27:00Z - US-031 - Authentication Screens
+
+**What was implemented:**
+- Auth layout for (auth) route group with centered container and PitLane logo
+- Login page at /login with LoginForm component
+- Signup page at /signup using existing SignupForm component
+- Forgot password page at /forgot-password with ForgotPasswordForm component
+- Reset password page at /reset-password?token=xxx with ResetPasswordForm component
+- All forms use react-hook-form + zod for validation
+- Login form stores access token in sessionStorage and redirects to /dashboard
+- Reset password form validates token on mount and handles all states (loading, invalid, expired, success)
+
+**Files changed:**
+- apps/web/src/app/(auth)/layout.tsx - Auth route group layout
+- apps/web/src/app/(auth)/signup/page.tsx - Signup page
+- apps/web/src/app/(auth)/login/page.tsx - Login page
+- apps/web/src/app/(auth)/forgot-password/page.tsx - Forgot password page
+- apps/web/src/app/(auth)/reset-password/page.tsx - Reset password page
+- apps/web/src/components/auth/login-form.tsx - Login form component
+- apps/web/src/components/auth/forgot-password-form.tsx - Forgot password form component
+- apps/web/src/components/auth/reset-password-form.tsx - Reset password form component
+
+**Acceptance Criteria Met:**
+- Routes: /signup, /login, /forgot-password, /reset-password ✓
+- Unauthenticated users only ✓ (public routes in (auth) group)
+- SSR rendering ✓ (Next.js App Router default)
+- Client-side validation ✓ (react-hook-form + zod on all forms)
+
+**Learnings for future iterations:**
+- Auth routes are in apps/web/src/app/(auth)/ directory
+- All auth forms are in components/auth/ directory
+- Forms use api() from lib/api.ts for backend calls
+- Next.js 15 App Router uses Promise<SearchParams> for page props
+
+**Gotchas encountered:**
+- None - straightforward implementation with existing patterns
+
+**Useful context:**
+- Login redirects to /dashboard on success
+- Reset password expects ?token= query param
+- Forgot password shows success even if email doesn't exist (security)
+- TypeScript compiles successfully
 
 ---
 
