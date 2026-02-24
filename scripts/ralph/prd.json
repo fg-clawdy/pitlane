@@ -726,9 +726,9 @@
       ],
       "dependencies": ["US-012"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "WebSocket endpoint: /ws/leagues/{id}/draft",
+      "status": "done",
+      "passes": true,
+      "notes": "WebSocket endpoint: /ws/leagues/{id}/draft. Completed 2026-02-24. Includes initial state push on connect, ping/pong, get_state message, and automatic broadcast on pick submission.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E live draft board passes"]
     },
     {

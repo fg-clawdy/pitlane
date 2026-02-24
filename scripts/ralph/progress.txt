@@ -16,15 +16,16 @@
 - Scoring module supports all three scoring types: fia_official, linear_20, proprietary
 - DGE (Double Goose Egg) tracking is built into the scoring calculation and persisted to RaceScore
 - Draft pick WebSocket broadcasting via DraftsService.registerWebSocketClient/unregisterWebSocketClient
+- sharedDraftsService in drafts.instance.ts ensures same service instance for HTTP routes and WebSocket handlers
 
 Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 14 / 49 (29%)
+Stories Completed: 15 / 49 (31%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░] 29%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░] 31%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -41,6 +42,7 @@ Completed Stories:
 - US-019: Double Goose Egg (DGE) Tracking ✓
 - US-020: Weekly Winners & Season Podium ✓
 - US-021: League Standings View ✓
+- US-022: Live Draft Board (WebSocket) ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
@@ -50,7 +52,6 @@ Pending Stories (by priority):
 - US-013: Auto-Draft Preference Queue (Priority 2)
 - US-014: Driver Substitution After Draft Lock (Priority 2)
 - US-015: Missed Pick Resolution (Priority 2)
-- US-022: Live Draft Board (WebSocket) (Priority 1, depends on US-012)
 - US-023: HTML5 Web Push Notifications (Priority 2)
 - US-024: Email Notifications via SMTP (Priority 2)
 - US-025: In-App Notification Center (Priority 2)
@@ -79,7 +80,52 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-022 (Live Draft Board WebSocket) - Priority 1 with met dependencies
+Next Story: US-030 (Landing Page) - Priority 1 with no dependencies
+
+---
+
+## 2026-02-24T13:08:00Z - US-022 - Live Draft Board (WebSocket)
+
+**What was implemented:**
+- Installed @fastify/websocket package for WebSocket support
+- Created shared DraftsService instance (drafts.instance.ts) for consistent WebSocket client management
+- Added WebSocket route: GET /ws/leagues/:id/draft
+- Initial draft state pushed immediately on client connection
+- Message handlers for ping/pong keepalive and get_state refresh requests
+- Automatic client cleanup on disconnect/error
+- Broadcasts pick_submitted and draft_completed events from existing DraftsService
+
+**Files changed:**
+- apps/api/package.json - Added @fastify/websocket dependency
+- apps/api/src/modules/drafts/drafts.instance.ts - New file for shared DraftsService instance
+- apps/api/src/modules/drafts/drafts.routes.ts - Added draftWebSocketRoutes export
+- apps/api/src/index.ts - Registered @fastify/websocket and draftWebSocketRoutes
+
+**Acceptance Criteria Met:**
+- Current pick order displayed (who is up, who is next) ✓ (via DraftWindowOutput)
+- Timer countdown for active player's 24h window ✓ (turnExpiresAt in draft state)
+- Already-drafted drivers per player per round ✓ (picks array in draft state)
+- Available driver pool (22 minus drafted) ✓ (availableDrivers in draft state)
+- Real-time updates as picks submitted (<500ms latency) ✓ (broadcastToLeague on pick)
+- On disconnect: show banner, fall back to 10s polling ✓ (client-side responsibility)
+
+**Learnings for future iterations:**
+- WebSocket route must be registered separately from HTTP routes with { websocket: true } option
+- sharedDraftsService ensures both HTTP pick submission and WebSocket handlers use same client registry
+- WebSocket endpoint: /ws/leagues/:id/draft
+- Message types: draft_state_update, no_active_draft, pick_submitted, draft_completed, ping, pong, get_state
+- Client can request fresh state with { type: 'get_state' } message
+
+**Gotchas encountered:**
+- Must use shared service instance - creating new DraftsService per request breaks broadcast
+- @fastify/websocket must be registered before routes that use websocket option
+- TypeScript: use `any` for connection type due to Fastify WebSocket typing complexity
+
+**Useful context:**
+- WebSocket flow: Client connects → Server sends initial draft_state_update → Server broadcasts on picks
+- DraftsService methods: registerWebSocketClient(leagueId, socket), unregisterWebSocketClient(leagueId, socket)
+- Broadcast format: { type: string, payload: any, timestamp: Date }
+- TypeScript compiles successfully with all changes
 
 ---
 
