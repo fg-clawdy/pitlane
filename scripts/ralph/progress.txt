@@ -10,17 +10,17 @@
 - Data discrepancy tracking: compare Jolpica values with admin-protected values field by field
 - Commissioner notifications use Notification model with type 'data_discrepancy'
 - Scoring module supports all three scoring types: fia_official, linear_20, proprietary
-- DGE (Double Goose Egg) tracking is built into the scoring calculation
+- DGE (Double Goose Egg) tracking is built into the scoring calculation and persisted to RaceScore
 - Draft pick WebSocket broadcasting via DraftsService.registerWebSocketClient/unregisterWebSocketClient
 
 Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 12 / 49 (24%)
+Stories Completed: 13 / 49 (27%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░] 24%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░] 27%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -34,6 +34,7 @@ Completed Stories:
 - US-016: Scoring Engine - FIA Official ✓
 - US-017: Scoring Engine - Linear 20-Point ✓
 - US-018: Scoring Engine - Proprietary ✓
+- US-019: Double Goose Egg (DGE) Tracking ✓
 - US-020: Weekly Winners & Season Podium ✓
 
 Pending Stories (by priority):
@@ -44,7 +45,6 @@ Pending Stories (by priority):
 - US-013: Auto-Draft Preference Queue (Priority 2)
 - US-014: Driver Substitution After Draft Lock (Priority 2)
 - US-015: Missed Pick Resolution (Priority 2)
-- US-019: Double Goose Egg (DGE) Tracking (Priority 2)
 - US-021: League Standings View (Priority 1, depends on US-019, US-020)
 - US-022: Live Draft Board (WebSocket) (Priority 1, depends on US-012)
 - US-023: HTML5 Web Push Notifications (Priority 2)
@@ -75,7 +75,44 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-019 (Double Goose Egg Tracking) - Priority 2 with met dependencies
+Next Story: US-021 (League Standings View) - Priority 1 with met dependencies
+
+---
+
+## 2026-02-23T22:37:00Z - US-019 - Double Goose Egg (DGE) Tracking
+
+**What was implemented:**
+- Added isDGE boolean field to RaceScore model in Prisma schema
+- DGE detection already implemented in scoring service (both drivers score 0 AND both had actual drivers)
+- isDGE now persisted to RaceScore table for historical tracking per race
+- dgeCount already tracked in LeagueMemberStat (incremented when isDGE=true)
+- Admin overrides trigger recalculation which updates DGE stats
+- DGE displayed prominently in standings via dgeCount field
+
+**Files changed:**
+- apps/api/prisma/schema.prisma - Added isDGE boolean to RaceScore model
+- apps/api/src/modules/scoring/scoring.service.ts - Updated saveRaceScores to persist isDGE
+
+**Acceptance Criteria Met:**
+- DGE occurs when BOTH drafted drivers score 0 points ✓
+- DGE only applies to actual drivers, not no_pick ✓ (checked via driver1Id !== null && driver2Id !== null)
+- dge_count persisted per player per league across season ✓ (LeagueMemberStat.dgeCount)
+- Displayed prominently in standings as DGE count ✓ (StandingsEntry.dgeCount)
+- Admin overrides retroactively recalculate DGE stats ✓ (recalculateAllLeagueScores)
+
+**Learnings for future iterations:**
+- DGE = Double Goose Egg (🥚🥚) - both drivers score 0 points
+- isDGE on RaceScore allows historical tracking per race
+- dgeCount on LeagueMemberStat aggregates across season
+- DGE does NOT apply when a player has no_pick (null driver) - only when both actual drivers score 0
+
+**Gotchas encountered:**
+- None - straightforward enhancement to existing scoring infrastructure
+
+**Useful context:**
+- DGE is calculated during score calculation and persisted atomically
+- Standings include dgeCount from LeagueMemberStat
+- TypeScript compiles successfully with all changes
 
 ---
 

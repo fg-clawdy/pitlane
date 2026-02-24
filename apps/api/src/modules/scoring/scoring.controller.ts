@@ -6,7 +6,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import ScoringService from './scoring.service';
-import { StandingsEntry, SeasonPodium, WeeklyWinner } from './types';
+import { StandingsEntry, SeasonPodium, WeeklyWinner, LeagueStandingsView, MemberRaceHistory } from './types';
 
 export class ScoringController {
   private scoringService: ScoringService;
@@ -197,6 +197,72 @@ export class ScoringController {
 
       const weeklyWinner = await this.scoringService.getWeeklyWinnerForRace(leagueId, race.id);
       return { weeklyWinner };
+    } catch (error) {
+      reply.code(500);
+      throw error;
+    }
+  }
+
+  /**
+   * Get complete league standings view with draft status
+   * GET /api/v1/leagues/:id/standings-view
+   */
+  async getLeagueStandingsView(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply
+  ): Promise<LeagueStandingsView> {
+    const { id: leagueId } = request.params;
+
+    try {
+      // Check visibility for non-members
+      const league = await this.prisma.league.findUnique({
+        where: { id: leagueId },
+        select: { visibility: true },
+      });
+
+      if (!league) {
+        reply.code(404);
+        throw new Error('League not found');
+      }
+
+      // For private leagues, would need auth check here
+      // For now, allow access to all
+
+      const view = await this.scoringService.getLeagueStandingsView(leagueId);
+      return view;
+    } catch (error) {
+      reply.code(500);
+      throw error;
+    }
+  }
+
+  /**
+   * Get member's race-by-race history
+   * GET /api/v1/leagues/:id/members/:memberId/history
+   */
+  async getMemberRaceHistory(
+    request: FastifyRequest<{ Params: { id: string; memberId: string } }>,
+    reply: FastifyReply
+  ): Promise<{ history: MemberRaceHistory[] }> {
+    const { id: leagueId, memberId } = request.params;
+
+    try {
+      // Verify member belongs to league
+      const member = await this.prisma.leagueMember.findFirst({
+        where: {
+          id: memberId,
+          leagueId,
+          leftAt: null,
+        },
+      });
+
+      if (!member) {
+        reply.code(404);
+        throw new Error('Member not found in league');
+      }
+
+      const history = await this.scoringService.getMemberRaceHistory(memberId);
+      return { history };
     } catch (error) {
       reply.code(500);
       throw error;

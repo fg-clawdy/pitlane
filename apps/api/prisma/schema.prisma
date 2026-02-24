@@ -330,6 +330,7 @@ model RaceScore {
   driver2Score    Float    @default(0)
   totalScore      Float    @default(0)
   isWeeklyWinner  Boolean  @default(false)
+  isDGE           Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -58,6 +58,24 @@ export async function scoringRoutes(fastify: FastifyInstance) {
     );
   });
 
+  // Get complete league standings view with draft status
+  // GET /api/v1/leagues/:id/standings-view
+  fastify.get('/leagues/:id/standings-view', async (request, reply) => {
+    return controller.getLeagueStandingsView(
+      request as any,
+      reply
+    );
+  });
+
+  // Get member's race-by-race history
+  // GET /api/v1/leagues/:id/members/:memberId/history
+  fastify.get('/leagues/:id/members/:memberId/history', async (request, reply) => {
+    return controller.getMemberRaceHistory(
+      request as any,
+      reply
+    );
+  });
+
   // Admin: Calculate scores for a race
   // POST /api/v1/admin/scoring/calculate/:raceId
   fastify.post('/admin/scoring/calculate/:raceId', async (request, reply) => {

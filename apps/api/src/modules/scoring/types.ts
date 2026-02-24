@@ -147,8 +147,11 @@ export const SCORING_CONFIGS: Record<ScoringType, ScoringConfig> = {
 };
 
 export interface StandingsEntry {
+  rank: number;
   leagueMemberId: string;
   userId: string;
+  username: string;
+  displayName: string | null;
   teamName: string;
   totalPoints: number;
   weeklyWins: number;
@@ -160,6 +163,57 @@ export interface StandingsEntry {
     score: number;
     isWeeklyWinner: boolean;
   }>;
+}
+
+export interface MemberRaceHistory {
+  raceId: string;
+  raceName: string;
+  round: number;
+  date: Date;
+  driver1: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+  driver2: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+  driver1Score: number;
+  driver2Score: number;
+  totalScore: number;
+  isWeeklyWinner: boolean;
+  isDGE: boolean;
+}
+
+export interface CurrentWeekDraftStatus {
+  draftWindowId: string | null;
+  raceId: string;
+  raceName: string;
+  round: number;
+  draftStatus: 'upcoming' | 'open' | 'closed' | 'completed' | 'no_draft';
+  opensAt: Date | null;
+  closesAt: Date | null;
+  currentRound: number | null;
+  currentTurnMemberId: string | null;
+  turnExpiresAt: Date | null;
+  pickedMembers: Array<{
+    leagueMemberId: string;
+    teamName: string;
+    hasPickedRound1: boolean;
+    hasPickedRound2: boolean;
+  }>;
+}
+
+export interface LeagueStandingsView {
+  leagueId: string;
+  leagueName: string;
+  seasonId: string;
+  seasonYear: number;
+  visibility: 'public' | 'private';
+  standings: StandingsEntry[];
+  currentWeek: CurrentWeekDraftStatus | null;
 }
 
 export interface SeasonPodium {

@@ -15,6 +15,9 @@ import {
   StandingsEntry,
   SeasonPodium,
   WeeklyWinner,
+  LeagueStandingsView,
+  MemberRaceHistory,
+  CurrentWeekDraftStatus,
 } from './types';
 
 export class ScoringService {
@@ -235,6 +238,7 @@ export class ScoringService {
             driver2Score: score.driver2Score,
             totalScore: score.totalScore,
             isWeeklyWinner: weeklyWinnerIds.includes(score.leagueMemberId),
+            isDGE: score.isDGE,
             updatedAt: new Date(),
           },
           create: {
@@ -245,6 +249,7 @@ export class ScoringService {
             driver2Score: score.driver2Score,
             totalScore: score.totalScore,
             isWeeklyWinner: weeklyWinnerIds.includes(score.leagueMemberId),
+            isDGE: score.isDGE,
           },
         });
 
@@ -351,8 +356,11 @@ export class ScoringService {
       
       if (!memberMap.has(memberId)) {
         memberMap.set(memberId, {
+          rank: 0,
           leagueMemberId: memberId,
           userId: score.leagueMember.userId,
+          username: score.leagueMember.user.username,
+          displayName: score.leagueMember.user.displayName,
           teamName: score.leagueMember.teamName,
           totalPoints: 0,
           weeklyWins: 0,
@@ -387,12 +395,263 @@ export class ScoringService {
     const standings = Array.from(memberMap.values());
     standings.sort((a, b) => b.totalPoints - a.totalPoints);
 
+    // Assign ranks
+    for (let i = 0; i < standings.length; i++) {
+      standings[i].rank = i + 1;
+    }
+
     // Sort race scores by round
     for (const entry of standings) {
       entry.raceScores.sort((a, b) => a.round - b.round);
     }
 
     return standings;
+  }
+
+  /**
+   * Get complete league standings view with draft status
+   */
+  async getLeagueStandingsView(leagueId: string): Promise<LeagueStandingsView> {
+    // Get league info
+    const league = await this.prisma.league.findUnique({
+      where: { id: leagueId },
+      include: { season: true },
+    });
+
+    if (!league) {
+      throw new Error('League not found');
+    }
+
+    // Get standings
+    const standings = await this.getLeagueStandings(leagueId);
+
+    // Get current week draft status
+    const currentWeek = await this.getCurrentWeekDraftStatus(leagueId);
+
+    return {
+      leagueId: league.id,
+      leagueName: league.name,
+      seasonId: league.seasonId,
+      seasonYear: league.season.year,
+      visibility: league.visibility as 'public' | 'private',
+      standings,
+      currentWeek,
+    };
+  }
+
+  /**
+   * Get member's race-by-race history with driver details
+   */
+  async getMemberRaceHistory(leagueMemberId: string): Promise<MemberRaceHistory[]> {
+    // Get all race scores for this member
+    const raceScoresRaw = await this.prisma.raceScore.findMany({
+      where: { leagueMemberId },
+      include: {
+        race: true,
+        leagueMember: {
+          include: { league: true },
+        },
+      },
+      orderBy: {
+        race: { round: 'asc' },
+      },
+    });
+    const raceScores = raceScoresRaw as unknown as Array<{ 
+      raceId: string; 
+      race: any; 
+      leagueMember: any; 
+      driver1Score: number; 
+      driver2Score: number; 
+      totalScore: number; 
+      isWeeklyWinner: boolean; 
+      isDGE: boolean 
+    }>;
+
+    // Get all draft picks for this member
+    const leagueMember = await this.prisma.leagueMember.findUnique({
+      where: { id: leagueMemberId },
+      include: {
+        league: true,
+        draftPicks: {
+          include: {
+            driver: true,
+            draftWindow: {
+              include: { race: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!leagueMember) {
+      return [];
+    }
+
+    // Build history for each race
+    const history: MemberRaceHistory[] = [];
+
+    for (const score of raceScores) {
+      // Find picks for this race
+      const racePicks = leagueMember.draftPicks.filter(
+        p => p.draftWindow.raceId === score.raceId
+      );
+
+      const sortedPicks = racePicks.sort((a, b) => a.round - b.round);
+
+      const driver1 = sortedPicks[0]?.driver;
+      const driver2 = sortedPicks[1]?.driver;
+
+      history.push({
+        raceId: score.raceId,
+        raceName: score.race.raceName,
+        round: score.race.round,
+        date: score.race.date,
+        driver1: driver1 ? {
+          id: driver1.id,
+          code: driver1.code,
+          name: `${driver1.givenName} ${driver1.familyName}`,
+        } : null,
+        driver2: driver2 ? {
+          id: driver2.id,
+          code: driver2.code,
+          name: `${driver2.givenName} ${driver2.familyName}`,
+        } : null,
+        driver1Score: score.driver1Score,
+        driver2Score: score.driver2Score,
+        totalScore: score.totalScore,
+        isWeeklyWinner: score.isWeeklyWinner,
+        isDGE: score.isDGE,
+      });
+    }
+
+    return history;
+  }
+
+  /**
+   * Get current week draft status for a league
+   */
+  async getCurrentWeekDraftStatus(leagueId: string): Promise<CurrentWeekDraftStatus | null> {
+    // Get the current or next race with an open/upcoming draft window
+    const draftWindow = await this.prisma.draftWindow.findFirst({
+      where: {
+        leagueId,
+        status: { in: ['open', 'upcoming'] },
+      },
+      include: {
+        race: true,
+        picks: true,
+      },
+      orderBy: {
+        opensAt: 'asc',
+      },
+    });
+
+    if (!draftWindow) {
+      // Check if there's any race this season without a draft window
+      const league = await this.prisma.league.findUnique({
+        where: { id: leagueId },
+        include: { season: true },
+      });
+
+      if (!league) return null;
+
+      // Find the next race without results
+      const nextRace = await this.prisma.race.findFirst({
+        where: {
+          seasonId: league.seasonId,
+          results: { none: {} },
+          date: { gte: new Date() },
+        },
+        orderBy: { date: 'asc' },
+      });
+
+      if (!nextRace) return null;
+
+      return {
+        draftWindowId: null,
+        raceId: nextRace.id,
+        raceName: nextRace.raceName,
+        round: nextRace.round,
+        draftStatus: 'no_draft',
+        opensAt: null,
+        closesAt: null,
+        currentRound: null,
+        currentTurnMemberId: null,
+        turnExpiresAt: null,
+        pickedMembers: [],
+      };
+    }
+
+    // Get league members with their pick status
+    const members = await this.prisma.leagueMember.findMany({
+      where: {
+        leagueId,
+        leftAt: null,
+      },
+    });
+
+    const pickedMembers = members.map(member => {
+      const memberPicks = draftWindow.picks.filter(p => p.leagueMemberId === member.id);
+      const hasPickedRound1 = memberPicks.some(p => p.round === 1);
+      const hasPickedRound2 = memberPicks.some(p => p.round === 2);
+
+      return {
+        leagueMemberId: member.id,
+        teamName: member.teamName,
+        hasPickedRound1,
+        hasPickedRound2,
+      };
+    });
+
+    // Calculate current turn if draft is open
+    let currentRound: number | null = null;
+    let currentTurnMemberId: string | null = null;
+    let turnExpiresAt: Date | null = null;
+
+    if (draftWindow.status === 'open') {
+      const round1Picks = draftWindow.picks.filter(p => p.round === 1);
+      const round2Picks = draftWindow.picks.filter(p => p.round === 2);
+
+      if (round1Picks.length < members.length) {
+        currentRound = 1;
+        // Current turn is next in order
+        const pickedMemberIds = round1Picks.map(p => p.leagueMemberId);
+        currentTurnMemberId = members.find(m => !pickedMemberIds.includes(m.id))?.id || null;
+      } else if (round2Picks.length < members.length) {
+        currentRound = 2;
+        const pickedMemberIds = round2Picks.map(p => p.leagueMemberId);
+        currentTurnMemberId = members.find(m => !pickedMemberIds.includes(m.id))?.id || null;
+      }
+
+      // Calculate turn expiry (24 hours from last pick or window open)
+      if (currentTurnMemberId) {
+        const lastPick = [...draftWindow.picks].sort((a, b) => 
+          (b.submittedAt?.getTime() || 0) - (a.submittedAt?.getTime() || 0)
+        )[0];
+
+        const lastPickTime = lastPick?.submittedAt || draftWindow.opensAt;
+        turnExpiresAt = new Date(lastPickTime.getTime() + 24 * 60 * 60 * 1000);
+        
+        // Don't exceed draft window close time
+        if (turnExpiresAt > draftWindow.closesAt) {
+          turnExpiresAt = draftWindow.closesAt;
+        }
+      }
+    }
+
+    return {
+      draftWindowId: draftWindow.id,
+      raceId: draftWindow.raceId,
+      raceName: draftWindow.race.raceName,
+      round: draftWindow.race.round,
+      draftStatus: draftWindow.status as 'upcoming' | 'open' | 'closed' | 'completed',
+      opensAt: draftWindow.opensAt,
+      closesAt: draftWindow.closesAt,
+      currentRound,
+      currentTurnMemberId,
+      turnExpiresAt,
+      pickedMembers,
+    };
   }
 
   /**
