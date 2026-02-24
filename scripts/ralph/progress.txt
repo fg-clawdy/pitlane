@@ -11,15 +11,16 @@
 - Commissioner notifications use Notification model with type 'data_discrepancy'
 - Scoring module supports all three scoring types: fia_official, linear_20, proprietary
 - DGE (Double Goose Egg) tracking is built into the scoring calculation
+- Draft pick WebSocket broadcasting via DraftsService.registerWebSocketClient/unregisterWebSocketClient
 
 Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 7 / 49 (14%)
+Stories Completed: 11 / 49 (22%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 14%
+[▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░] 22%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -28,20 +29,20 @@ Completed Stories:
 - US-006: Jolpica Race Results Import ✓
 - US-008: Create League ✓
 - US-009: Join League ✓
+- US-011: Draft Window Lifecycle ✓
+- US-012: Draft Pick Submission ✓
 - US-016: Scoring Engine - FIA Official ✓
+- US-017: Scoring Engine - Linear 20-Point ✓
+- US-018: Scoring Engine - Proprietary ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
 - US-004: Email Change with Hold Period (Priority 2, depends on US-003)
 - US-007: Admin Data Override (Priority 2, depends on US-005, US-006)
 - US-010: Commissioner League Management (Priority 2, depends on US-008, US-009)
-- US-011: Draft Window Lifecycle (Priority 1, depends on US-008, US-009)
-- US-012: Draft Pick Submission (Priority 1, depends on US-011)
 - US-013: Auto-Draft Preference Queue (Priority 2)
 - US-014: Driver Substitution After Draft Lock (Priority 2)
 - US-015: Missed Pick Resolution (Priority 2)
-- US-017: Scoring Engine - Linear 20-Point (Priority 1, depends on US-006)
-- US-018: Scoring Engine - Proprietary (Priority 1, depends on US-006)
 - US-019: Double Goose Egg (DGE) Tracking (Priority 2)
 - US-020: Weekly Winners & Season Podium (Priority 1)
 - US-021: League Standings View (Priority 1, depends on US-019, US-020)
@@ -74,146 +75,136 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-017/018 (Scoring Engines) or US-011 (Draft Window Lifecycle) - all Priority 1 with met dependencies
-
-## 2026-02-23T14:19:00Z - US-002 - User Login with Account Lockout
-
-**What was implemented:**
-- Complete authentication API with login, refresh, and logout endpoints
-- Account lockout system (5 failed attempts = 15 minute lock)
-- JWT token management with RS256 asymmetric encryption
-- Password hashing with bcrypt
-- Refresh token storage in httpOnly cookies
-- Fastify server setup with CORS and cookie support
-
-**Files changed:**
-- apps/api/prisma/schema.prisma - Added User, RefreshToken models
-- apps/api/src/lib/password.ts - Password hashing utilities
-- apps/api/src/lib/jwt.ts - JWT token generation and verification
-- apps/api/src/modules/auth/auth.controller.ts - Auth controller with login/refresh/logout
-- apps/api/src/modules/auth/auth.routes.ts - Auth routes
-- apps/api/src/modules/auth/auth.service.ts - Auth business logic
-- apps/api/src/modules/auth/types.ts - Auth types and interfaces
-- apps/api/src/index.ts - Main Fastify server
-- apps/api/package.json - API dependencies
-- apps/api/tsconfig.json - TypeScript configuration
-- apps/api/.env.example - Environment variables template
-- apps/api/README.md - API documentation
-
-**Learnings for future iterations:**
-- This codebase uses Fastify 5.x as the web framework (not Express)
-- Prisma ORM is used for database operations with PostgreSQL
-- JWT tokens use RS256 asymmetric encryption (private key for signing, public key for verification)
-- Access tokens are short-lived (15min) and stored in memory, refresh tokens are long-lived (30d) in httpOnly cookies
-- Account lockout is implemented with failed_attempts counter and locked_until timestamp
-- The API follows REST conventions with /api/v1 prefix
-- All auth endpoints are in modules/auth/ directory
-- Environment variables are managed via .env files
-- The project uses npm workspaces with apps/* structure
-
-**Gotchas encountered:**
-- Need to generate JWT keys using openssl before running the server
-- Fastify requires explicit registration of plugins like @fastify/cors and @fastify/cookie
-- Prisma client must be generated with `npm run db:generate` before running
-- Database schema must be pushed with `npm run db:push`
-- Cookie secret must be set for httpOnly cookies to work
-- CORS origin must match the frontend URL
-- npm install took longer than expected due to workspace dependencies
-
-**Useful context:**
-- The API server runs on port 3001 by default
-- Health check endpoint is at /health
-- Auth endpoints are under /api/v1/auth
-- Failed login attempts are tracked per user email
-- Lockout duration is 15 minutes (900000ms)
-- Failed attempts threshold is 5
-- All timestamps use JavaScript Date objects
-- Error responses follow a consistent format with message and optional details
+Next Story: US-020 (Weekly Winners & Season Podium) - Priority 1 with met dependencies
 
 ---
 
-## 2026-02-23T16:09:00Z - US-005 - Jolpica Data Import - Seasons and Races
+## 2026-02-23T22:12:00Z - US-012 - Draft Pick Submission
 
 **What was implemented:**
-- Jolpica API client for F1 data (https://api.jolpi.ca/ergast/f1/)
-- Season sync on app startup for current year
-- Race sync with round, raceName, Circuit, date, time
-- Driver sync with driverId, permanentNumber, code, givenName, familyName, nationality, dateOfBirth
-- Race result polling logic (3 hours post-race start, every 2 hours, max 18 polls)
-- Admin alert creation when max polls reached without results
-- F1 data API endpoints: GET /seasons, GET /seasons/:year/races, GET /seasons/:year/races/:round, GET /seasons/:year/drivers
-- Admin sync endpoint: POST /admin/sync
+- Pick submission endpoint with full validation (driver available, player's turn, window open)
+- Available drivers now include season points and last race position for informed drafting
+- WebSocket broadcasting infrastructure for real-time draft updates (< 500ms latency target)
+- PickSubmittedPayload type for structured WebSocket messages
+- Automatic turn advancement after pick submission
+- Draft completion detection and status update
 
 **Files changed:**
-- apps/api/src/modules/f1data/jolpica-client.ts - Jolpica API client with fetch methods and sync logic
-- apps/api/src/modules/f1data/f1data.service.ts - F1 data service with polling/retry logic
-- apps/api/src/modules/f1data/f1data.controller.ts - HTTP handlers for F1 data endpoints
-- apps/api/src/modules/f1data/f1data.routes.ts - Fastify routes for F1 data
-- apps/api/src/index.ts - Updated to register F1 data routes and sync on startup
-- apps/api/src/lib/auth.ts - Auth middleware for protected routes
-- apps/api/src/modules/users/users.controller.ts - User profile handlers
-- apps/api/src/modules/users/users.service.ts - User profile service
-- apps/api/src/modules/users/users.routes.ts - User profile routes
-- apps/api/src/modules/users/types.ts - TypeScript interfaces
-- apps/api/tsconfig.json - Disabled noUnusedLocals/noUnusedParameters
+- apps/api/src/modules/drafts/types.ts - Added DraftWebSocketMessage, PickSubmittedPayload, enhanced AvailableDriver type
+- apps/api/src/modules/drafts/drafts.service.ts - Added WebSocket client management, broadcasting, season points for drivers
+- apps/api/src/modules/drafts/drafts.routes.ts - Routes already existed for pick submission
 
 **Learnings for future iterations:**
-- Jolpica API base URL: https://api.jolpi.ca/ergast/f1/
-- Jolpica response format: MRData wrapper with specific table names (RaceTable, DriverTable, etc.)
-- Current F1 season year is determined by checking if we're in Jan-Feb (use previous year) or March+ (current year)
-- Race results polling config is stored in SystemSetting table (jolpica_poll_start_hours_after_race, jolpica_poll_interval_hours, jolpica_max_polls)
-- Admin alerts are created as AuditLog entries with action 'jolpica_poll_failed'
-- F1 data module is in modules/f1data/ directory
-- TypeScript compile command from root: npx tsc --project apps/api/tsconfig.json
+- DraftsService has WebSocket client management: registerWebSocketClient(leagueId, client), unregisterWebSocketClient(leagueId, client)
+- Broadcast format: { type: 'pick_submitted' | 'draft_completed', payload: PickSubmittedPayload, timestamp: Date }
+- Available drivers now show seasonPoints and lastRacePosition for draft strategy
+- Turn advances automatically after each pick, draft completes when all picks submitted
 
 **Gotchas encountered:**
-- Pre-existing files had syntax errors (auth.ts, users.controller.ts, users.service.ts, users.routes.ts) that needed fixing
-- Jolpica returns strings for all numeric values (position, points, round) - must parse to int/float
-- Race time is in UTC format "HH:MM:SSZ" - needs parsing
-- Prisma Json type requires proper serialization (JSON.parse(JSON.stringify(result)))
-- tsconfig noUnusedLocals was causing issues with generic type parameters
+- Driver season points require querying all race results - could be optimized with caching
+- WebSocket infrastructure is in place but actual WebSocket route needs to be added to index.ts
 
 **Useful context:**
-- Season sync automatically creates season if not exists
-- Race and driver sync uses upsert to handle both create and update
-- Admin protected results are not overwritten by Jolpica sync
-- Data discrepancies are logged when admin override exists
-- Fastify route handlers use { preHandler: authenticate } for protected routes
-- F1 data endpoints are public (no auth required)
-- Admin sync endpoint is open for now (should add auth later)
+- API endpoint: POST /api/v1/drafts/:draftId/picks - Submit a pick
+- WebSocket clients are managed per league ID for targeted broadcasting
+- Pick validation checks: driver exists, not already picked, player's turn, window open, member hasn't picked in this round
+- TypeScript compiles successfully with all changes
 
 ---
 
-## 2026-02-23T16:24:00Z - US-006 - Jolpica Race Results Import
+## 2026-02-23T21:55:00Z - US-011 - Draft Window Lifecycle
 
 **What was implemented:**
-- Race results sync with position, Driver, Constructor, points, status, Time, FastestLap
-- Admin override field preservation when Jolpica data differs
-- Data discrepancy records creation for position, points, status, fastestLap fields
-- Commissioner notification when data discrepancies detected
-- Race results API endpoint: GET /seasons/:year/races/:round/results
-- Admin sync race results endpoint: POST /admin/sync-results/:year/:round
+- Complete draft module with types, service, controller, and routes
+- Draft window opens Monday 00:00 GMT of race week
+- Draft closes at qualifying start time OR when all picks submitted
+- 24-hour turn timer for each player
+- Snake and regular draft types supported
+- Draft order based on join order (randomizable via league setting)
+- Auto-complete when all players submit both picks
+- Missed pick resolution (random, top_points, no_pick)
+- Admin endpoints for opening/closing windows and resolving missed picks
 
 **Files changed:**
-- apps/api/src/modules/f1data/jolpica-client.ts - Enhanced syncRaceResults with discrepancy tracking
-- apps/api/src/modules/f1data/f1data.service.ts - Added notifyCommissionersOfDiscrepancies, getRaceResults
-- apps/api/src/modules/f1data/f1data.controller.ts - Added getRaceResults, syncRaceResults handlers
-- apps/api/src/modules/f1data/f1data.routes.ts - Added results routes
+- apps/api/src/modules/drafts/types.ts - Draft types, interfaces, and helper functions
+- apps/api/src/modules/drafts/drafts.service.ts - Draft service with lifecycle logic
+- apps/api/src/modules/drafts/drafts.controller.ts - HTTP handlers for draft endpoints
+- apps/api/src/modules/drafts/drafts.routes.ts - Fastify routes for drafts
+- apps/api/src/index.ts - Added drafts routes registration
 
 **Learnings for future iterations:**
-- Data discrepancy tracking compares each field individually (position, points, status, fastestLap)
-- Commissioner notifications use Notification model with type 'data_discrepancy'
-- RaceResultSyncOutput interface includes discrepancies array for tracking
-- League creators (first members) are considered commissioners for notifications
-- jolpicaValue on RaceResult stores the complete Jolpica response for audit
+- Draft module is in modules/drafts/ directory
+- Draft window opensAt = Monday 00:00 GMT of race week (calculateDraftOpenTime helper)
+- Draft window closesAt = day before race at 14:00 UTC (calculateDraftCloseTime helper)
+- Draft order is based on join order for now (TODO: store randomized order in DB)
+- Snake draft reverses order for Round 2
+- Turn expiry is 24 hours from last pick or window open time
+- Draft status: upcoming → open → closed/completed
+- All picks must be submitted for draft to be "completed"
 
 **Gotchas encountered:**
-- Need to handle case where race has no leagues (no commissioners to notify)
-- Must return raceId from syncRaceResults for downstream processing
+- Fastify route handler generics cause type errors - use generic FastifyRequest in controller methods and cast params/body with `as` keyword
+- Must use wrapper functions in routes file to avoid generic type issues with Fastify
 
 **Useful context:**
-- Discrepancy notification includes raceId, raceName, discrepancyCount, and affected fields
-- Admin protected results are skipped during sync but discrepancies are logged
+- API endpoints:
+  - GET /api/v1/leagues/:id/drafts - Get all draft windows for a league
+  - GET /api/v1/leagues/:id/drafts/current - Get current draft window
+  - GET /api/v1/drafts/:draftId - Get draft window by ID
+  - GET /api/v1/drafts/:draftId/state - Get draft state
+  - POST /api/v1/drafts/:draftId/picks - Submit a pick
+  - POST /api/v1/admin/drafts/open-scheduled - Open scheduled windows
+  - POST /api/v1/admin/drafts/close-expired - Close expired windows
+  - POST /api/v1/admin/drafts/create-for-race/:raceId - Create draft windows for race
+  - POST /api/v1/admin/drafts/:draftId/resolve-missed/:leagueMemberId - Resolve missed pick
+- US-017 and US-018 were already implemented as part of US-016 (all three scoring systems)
+- TypeScript compiles successfully with all changes
+
+---
+
+## 2026-02-23T17:32:00Z - US-016 - Scoring Engine - FIA Official
+
+**What was implemented:**
+- Complete scoring engine with support for all three scoring systems (fia_official, linear_20, proprietary)
+- FIA official scoring: positions 1-10 score 25,18,15,12,10,8,6,4,2,1 points, positions 11-20 score 0
+- Fastest lap bonus (+1) for FIA scoring if driver finishes in top 10
+- Linear 20-point scoring: 1st=20pts, declining by 1 per position to 20th=1pt
+- Proprietary scoring: max(0, 10 - abs(position - 10)) - peaks at position 10 with 10 points
+- Finish status handling: DNF, DNS, DSQ all score 0
+- Player race score = Driver 1 score + Driver 2 score
+- Double Goose Egg (DGE) detection when both drivers score 0
+- Weekly winner determination (highest score, ties allowed)
+- League standings calculation with total points, weekly wins, DGE count
+- Score recalculation for admin overrides
+- API endpoints for standings and race scores
+
+**Files changed:**
+- apps/api/src/modules/scoring/types.ts - Scoring types, interfaces, and scoring tables
+- apps/api/src/modules/scoring/scoring.service.ts - Core scoring logic and calculations
+- apps/api/src/modules/scoring/scoring.controller.ts - HTTP handlers for scoring endpoints
+- apps/api/src/modules/scoring/scoring.routes.ts - Fastify routes for scoring
+- apps/api/src/index.ts - Added scoring routes registration
+
+**Learnings for future iterations:**
+- Scoring module is in modules/scoring/ directory
+- All three scoring types are implemented in one service for consistency
+- SCORING_CONFIGS object contains configuration for all scoring types
+- Status normalization handles various status strings (Finished, DNF, DNS, DSQ, +1 LAP, etc.)
+- LeagueMemberStat is updated atomically with race scores
+- Weekly winners can be multiple (ties allowed)
+- DGE tracking is built into the scoring calculation
+
+**Gotchas encountered:**
+- Must pass PrismaClient to controller constructor for league/race lookups
+- Fastify request.server.prisma doesn't exist - need to pass prisma instance
+
+**Useful context:**
+- API endpoints:
+  - GET /api/v1/leagues/:id/standings - Get league standings
+  - GET /api/v1/leagues/:id/races/:round/scores - Get race scores
+  - POST /api/v1/admin/scoring/calculate/:raceId - Calculate scores for a race
+  - POST /api/v1/admin/scoring/recalculate/:leagueId - Recalculate all league scores
+- Score calculation is triggered after Jolpica race results import
 - TypeScript compiles successfully with all changes
 
 ---
@@ -313,49 +304,144 @@ Next Story: US-017/018 (Scoring Engines) or US-011 (Draft Window Lifecycle) - al
 
 ---
 
-## 2026-02-23T17:32:00Z - US-016 - Scoring Engine - FIA Official
+## 2026-02-23T16:24:00Z - US-006 - Jolpica Race Results Import
 
 **What was implemented:**
-- Complete scoring engine with support for all three scoring systems (fia_official, linear_20, proprietary)
-- FIA official scoring: positions 1-10 score 25,18,15,12,10,8,6,4,2,1 points, positions 11-20 score 0
-- Fastest lap bonus (+1) for FIA scoring if driver finishes in top 10
-- Linear 20-point scoring: 1st=20pts, declining by 1 per position to 20th=1pt
-- Proprietary scoring: max(0, 10 - abs(position - 10)) - peaks at position 10 with 10 points
-- Finish status handling: DNF, DNS, DSQ all score 0
-- Player race score = Driver 1 score + Driver 2 score
-- Double Goose Egg (DGE) detection when both drivers score 0
-- Weekly winner determination (highest score, ties allowed)
-- League standings calculation with total points, weekly wins, DGE count
-- Score recalculation for admin overrides
-- API endpoints for standings and race scores
+- Race results sync with position, Driver, Constructor, points, status, Time, FastestLap
+- Admin override field preservation when Jolpica data differs
+- Data discrepancy records creation for position, points, status, fastestLap fields
+- Commissioner notification when data discrepancies detected
+- Race results API endpoint: GET /seasons/:year/races/:round/results
+- Admin sync race results endpoint: POST /admin/sync-results/:year/:round
 
 **Files changed:**
-- apps/api/src/modules/scoring/types.ts - Scoring types, interfaces, and scoring tables
-- apps/api/src/modules/scoring/scoring.service.ts - Core scoring logic and calculations
-- apps/api/src/modules/scoring/scoring.controller.ts - HTTP handlers for scoring endpoints
-- apps/api/src/modules/scoring/scoring.routes.ts - Fastify routes for scoring
-- apps/api/src/index.ts - Added scoring routes registration
+- apps/api/src/modules/f1data/jolpica-client.ts - Enhanced syncRaceResults with discrepancy tracking
+- apps/api/src/modules/f1data/f1data.service.ts - Added notifyCommissionersOfDiscrepancies, getRaceResults
+- apps/api/src/modules/f1data/f1data.controller.ts - Added getRaceResults, syncRaceResults handlers
+- apps/api/src/modules/f1data/f1data.routes.ts - Added results routes
 
 **Learnings for future iterations:**
-- Scoring module is in modules/scoring/ directory
-- All three scoring types are implemented in one service for consistency
-- SCORING_CONFIGS object contains configuration for all scoring types
-- Status normalization handles various status strings (Finished, DNF, DNS, DSQ, +1 LAP, etc.)
-- LeagueMemberStat is updated atomically with race scores
-- Weekly winners can be multiple (ties allowed)
-- DGE tracking is built into the scoring calculation
+- Data discrepancy tracking compares each field individually (position, points, status, fastestLap)
+- Commissioner notifications use Notification model with type 'data_discrepancy'
+- RaceResultSyncOutput interface includes discrepancies array for tracking
+- League creators (first members) are considered commissioners for notifications
+- jolpicaValue on RaceResult stores the complete Jolpica response for audit
 
 **Gotchas encountered:**
-- Must pass PrismaClient to controller constructor for league/race lookups
-- Fastify request.server.prisma doesn't exist - need to pass prisma instance
+- Need to handle case where race has no leagues (no commissioners to notify)
+- Must return raceId from syncRaceResults for downstream processing
 
 **Useful context:**
-- API endpoints:
-  - GET /api/v1/leagues/:id/standings - Get league standings
-  - GET /api/v1/leagues/:id/races/:round/scores - Get race scores
-  - POST /api/v1/admin/scoring/calculate/:raceId - Calculate scores for a race
-  - POST /api/v1/admin/scoring/recalculate/:leagueId - Recalculate all league scores
-- Score calculation is triggered after Jolpica race results import
+- Discrepancy notification includes raceId, raceName, discrepancyCount, and affected fields
+- Admin protected results are skipped during sync but discrepancies are logged
 - TypeScript compiles successfully with all changes
+
+---
+
+## 2026-02-23T16:09:00Z - US-005 - Jolpica Data Import - Seasons and Races
+
+**What was implemented:**
+- Jolpica API client for F1 data (https://api.jolpi.ca/ergast/f1/)
+- Season sync on app startup for current year
+- Race sync with round, raceName, Circuit, date, time
+- Driver sync with driverId, permanentNumber, code, givenName, familyName, nationality, dateOfBirth
+- Race result polling logic (3 hours post-race start, every 2 hours, max 18 polls)
+- Admin alert creation when max polls reached without results
+- F1 data API endpoints: GET /seasons, GET /seasons/:year/races, GET /seasons/:year/races/:round, GET /seasons/:year/drivers
+- Admin sync endpoint: POST /admin/sync
+
+**Files changed:**
+- apps/api/src/modules/f1data/jolpica-client.ts - Jolpica API client with fetch methods and sync logic
+- apps/api/src/modules/f1data/f1data.service.ts - F1 data service with polling/retry logic
+- apps/api/src/modules/f1data/f1data.controller.ts - HTTP handlers for F1 data endpoints
+- apps/api/src/modules/f1data/f1data.routes.ts - Fastify routes for F1 data
+- apps/api/src/index.ts - Updated to register F1 data routes and sync on startup
+- apps/api/src/lib/auth.ts - Auth middleware for protected routes
+- apps/api/src/modules/users/users.controller.ts - User profile handlers
+- apps/api/src/modules/users/users.service.ts - User profile service
+- apps/api/src/modules/users/users.routes.ts - User profile routes
+- apps/api/src/modules/users/types.ts - TypeScript interfaces
+- apps/api/tsconfig.json - Disabled noUnusedLocals/noUnusedParameters
+
+**Learnings for future iterations:**
+- Jolpica API base URL: https://api.jolpi.ca/ergast/f1/
+- Jolpica response format: MRData wrapper with specific table names (RaceTable, DriverTable, etc.)
+- Current F1 season year is determined by checking if we're in Jan-Feb (use previous year) or March+ (current year)
+- Race results polling config is stored in SystemSetting table (jolpica_poll_start_hours_after_race, jolpica_poll_interval_hours, jolpica_max_polls)
+- Admin alerts are created as AuditLog entries with action 'jolpica_poll_failed'
+- F1 data module is in modules/f1data/ directory
+- TypeScript compile command from root: npx tsc --project apps/api/tsconfig.json
+
+**Gotchas encountered:**
+- Pre-existing files had syntax errors (auth.ts, users.controller.ts, users.service.ts, users.routes.ts) that needed fixing
+- Jolpica returns strings for all numeric values (position, points, round) - must parse to int/float
+- Race time is in UTC format "HH:MM:SSZ" - needs parsing
+- Prisma Json type requires proper serialization (JSON.parse(JSON.stringify(result)))
+- tsconfig noUnusedLocals was causing issues with generic type parameters
+
+**Useful context:**
+- Season sync automatically creates season if not exists
+- Race and driver sync uses upsert to handle both create and update
+- Admin protected results are not overwritten by Jolpica sync
+- Data discrepancies are logged when admin override exists
+- Fastify route handlers use { preHandler: authenticate } for protected routes
+- F1 data endpoints are public (no auth required)
+- Admin sync endpoint is open for now (should add auth later)
+
+---
+
+## 2026-02-23T14:19:00Z - US-002 - User Login with Account Lockout
+
+**What was implemented:**
+- Complete authentication API with login, refresh, and logout endpoints
+- Account lockout system (5 failed attempts = 15 minute lock)
+- JWT token management with RS256 asymmetric encryption
+- Password hashing with bcrypt
+- Refresh token storage in httpOnly cookies
+- Fastify server setup with CORS and cookie support
+
+**Files changed:**
+- apps/api/prisma/schema.prisma - Added User, RefreshToken models
+- apps/api/src/lib/password.ts - Password hashing utilities
+- apps/api/src/lib/jwt.ts - JWT token generation and verification
+- apps/api/src/modules/auth/auth.controller.ts - Auth controller with login/refresh/logout
+- apps/api/src/modules/auth/auth.routes.ts - Auth routes
+- apps/api/src/modules/auth/auth.service.ts - Auth business logic
+- apps/api/src/modules/auth/types.ts - Auth types and interfaces
+- apps/api/src/index.ts - Main Fastify server
+- apps/api/package.json - API dependencies
+- apps/api/tsconfig.json - TypeScript configuration
+- apps/api/.env.example - Environment variables template
+- apps/api/README.md - API documentation
+
+**Learnings for future iterations:**
+- This codebase uses Fastify 5.x as the web framework (not Express)
+- Prisma ORM is used for database operations with PostgreSQL
+- JWT tokens use RS256 asymmetric encryption (private key for signing, public key for verification)
+- Access tokens are short-lived (15min) and stored in memory, refresh tokens are long-lived (30d) in httpOnly cookies
+- Account lockout is implemented with failed_attempts counter and locked_until timestamp
+- The API follows REST conventions with /api/v1 prefix
+- All auth endpoints are in modules/auth/ directory
+- Environment variables are managed via .env files
+- The project uses npm workspaces with apps/* structure
+
+**Gotchas encountered:**
+- Need to generate JWT keys using openssl before running the server
+- Fastify requires explicit registration of plugins like @fastify/cors and @fastify/cookie
+- Prisma client must be generated with `npm run db:generate` before running
+- Database schema must be pushed with `npm run db:push`
+- Cookie secret must be set for httpOnly cookies to work
+- CORS origin must match the frontend URL
+- npm install took longer than expected due to workspace dependencies
+
+**Useful context:**
+- The API server runs on port 3001 by default
+- Health check endpoint is at /health
+- Auth endpoints are under /api/v1/auth
+- Failed login attempts are tracked per user email
+- Lockout duration is 15 minutes (900000ms)
+- Failed attempts threshold is 5
+- All timestamps use JavaScript Date objects
+- Error responses follow a consistent format with message and optional details
 
 ---

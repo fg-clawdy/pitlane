@@ -99,7 +99,38 @@ export interface DraftWindowOutput {
     code: string;
     name: string;
     team: string;
+    seasonPoints: number;
+    lastRacePosition: number | null;
   }>;
+}
+
+// WebSocket event types for draft
+export interface DraftWebSocketMessage {
+  type: 'pick_submitted' | 'draft_completed' | 'turn_changed' | 'draft_state_update';
+  payload: any;
+  timestamp: Date;
+}
+
+export interface PickSubmittedPayload {
+  pick: {
+    id: string;
+    leagueMemberId: string;
+    teamName: string;
+    driverId: string;
+    driverCode: string;
+    driverName: string;
+    round: number;
+    pickOrder: number;
+    resolutionMethod: ResolutionMethod | null;
+    submittedAt: Date | null;
+  };
+  nextTurn: {
+    leagueMemberId: string | null;
+    teamName: string | null;
+    round: number;
+    expiresAt: Date | null;
+  } | null;
+  draftCompleted: boolean;
 }
 
 // System settings defaults

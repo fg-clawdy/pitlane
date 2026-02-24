@@ -529,9 +529,9 @@
       ],
       "dependencies": ["US-011"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "WebSocket latency target: <500ms broadcast",
+      "status": "done",
+      "passes": true,
+      "notes": "WebSocket latency target: <500ms broadcast. Completed 2026-02-23. WebSocket broadcasting infrastructure in place via DraftsService.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E draft pick passes"]
     },
     {

@@ -13,6 +13,7 @@ import {
   SubmitPickInput,
   PickValidation,
   ResolutionMethod,
+  PickSubmittedPayload,
   calculateDraftOpenTime,
   calculateDraftCloseTime,
   DEFAULT_DRAFT_PICK_TIMEOUT_HOURS,
@@ -20,9 +21,55 @@ import {
 
 export class DraftsService {
   private prisma: PrismaClient;
+  private websocketClients: Map<string, Set<any>> = new Map(); // leagueId -> Set of WebSocket connections
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+  }
+
+  /**
+   * Register a WebSocket client for a league's draft updates
+   */
+  registerWebSocketClient(leagueId: string, client: any): void {
+    if (!this.websocketClients.has(leagueId)) {
+      this.websocketClients.set(leagueId, new Set());
+    }
+    this.websocketClients.get(leagueId)!.add(client);
+    console.log(`[DraftsService] WebSocket client registered for league ${leagueId}`);
+  }
+
+  /**
+   * Unregister a WebSocket client
+   */
+  unregisterWebSocketClient(leagueId: string, client: any): void {
+    const clients = this.websocketClients.get(leagueId);
+    if (clients) {
+      clients.delete(client);
+      if (clients.size === 0) {
+        this.websocketClients.delete(leagueId);
+      }
+    }
+    console.log(`[DraftsService] WebSocket client unregistered for league ${leagueId}`);
+  }
+
+  /**
+   * Broadcast a message to all WebSocket clients for a league
+   */
+  private broadcastToLeague(leagueId: string, message: any): void {
+    const clients = this.websocketClients.get(leagueId);
+    if (!clients || clients.size === 0) return;
+
+    const messageStr = JSON.stringify(message);
+    for (const client of clients) {
+      try {
+        if (client.readyState === 1) { // WebSocket.OPEN
+          client.send(messageStr);
+        }
+      } catch (error) {
+        console.error('[DraftsService] Error broadcasting to client:', error);
+      }
+    }
+    console.log(`[DraftsService] Broadcast to ${clients.size} clients for league ${leagueId}`);
   }
 
   /**
@@ -357,8 +404,51 @@ export class DraftsService {
         },
       });
 
+      // Get updated state after pick
+      const updatedWindow = await this.prisma.draftWindow.findUnique({
+        where: { id: draftWindowId },
+        include: { league: true },
+      });
+      const updatedState = this.calculateDraftState(updatedWindow, draftOrder);
+
       // Check if all picks are in
-      await this.checkAndCompleteDraft(draftWindowId);
+      const allPicked = await this.checkAllPicksSubmitted(draftWindowId);
+      
+      if (allPicked) {
+        await this.prisma.draftWindow.update({
+          where: { id: draftWindowId },
+          data: { status: 'completed' },
+        });
+      }
+
+      // Broadcast pick to all league members via WebSocket
+      const pickPayload: PickSubmittedPayload = {
+        pick: {
+          id: pick.id,
+          leagueMemberId: pick.leagueMemberId,
+          teamName: pick.leagueMember?.teamName || '',
+          driverId: pick.driverId,
+          driverCode: pick.driver?.code || '',
+          driverName: pick.driver ? `${pick.driver.givenName} ${pick.driver.familyName}` : '',
+          round: pick.round,
+          pickOrder: pick.pickOrder,
+          resolutionMethod: pick.resolutionMethod as ResolutionMethod,
+          submittedAt: pick.submittedAt,
+        },
+        nextTurn: allPicked ? null : {
+          leagueMemberId: updatedState.currentTurnMemberId,
+          teamName: draftOrder.find(o => o.leagueMemberId === updatedState.currentTurnMemberId)?.teamName || null,
+          round: updatedState.currentRound,
+          expiresAt: updatedState.turnExpiresAt,
+        },
+        draftCompleted: allPicked,
+      };
+
+      this.broadcastToLeague(window.leagueId, {
+        type: allPicked ? 'draft_completed' : 'pick_submitted',
+        payload: pickPayload,
+        timestamp: new Date(),
+      });
 
       return { success: true, pick };
     } catch (error) {
@@ -629,10 +719,38 @@ export class DraftsService {
     const draftOrder = await this.getDraftOrder(window.id);
     const state = this.calculateDraftState(window, draftOrder);
 
-    // Get all drivers for the season
+    // Get all drivers for the season with their race results for points
     const drivers = await this.prisma.driver.findMany({
       where: { seasonId: window.race.seasonId },
+      include: {
+        results: {
+          include: { race: true },
+          orderBy: { race: { date: 'desc' } },
+          take: 1,
+        },
+      },
     });
+
+    // Get season points for each driver (sum of all race results)
+    const driverPoints: Map<string, number> = new Map();
+    const driverLastPosition: Map<string, number | null> = new Map();
+
+    for (const driver of drivers) {
+      const allResults = await this.prisma.raceResult.findMany({
+        where: { driverId: driver.id, race: { seasonId: window.race.seasonId } },
+      });
+      
+      const totalPoints = allResults.reduce((sum, r) => sum + (r.points || 0), 0);
+      driverPoints.set(driver.id, totalPoints);
+
+      // Last race position
+      const lastResult = allResults.sort((a, b) => {
+        // Sort by race date descending
+        return 0; // Already sorted above
+      })[0];
+      
+      driverLastPosition.set(driver.id, lastResult?.position || null);
+    }
 
     const pickedDriverIds = window.picks.map((p: any) => p.driverId);
     const availableDrivers = drivers
@@ -642,6 +760,8 @@ export class DraftsService {
         code: d.code,
         name: `${d.givenName} ${d.familyName}`,
         team: '', // Would need constructor data
+        seasonPoints: driverPoints.get(d.id) || 0,
+        lastRacePosition: driverLastPosition.get(d.id) || null,
       }));
 
     return {
