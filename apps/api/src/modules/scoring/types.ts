@@ -161,3 +161,29 @@ export interface StandingsEntry {
     isWeeklyWinner: boolean;
   }>;
 }
+
+export interface SeasonPodium {
+  seasonId: string;
+  seasonYear: number;
+  isCompleted: boolean;
+  podium: Array<{
+    position: number;
+    leagueMemberId: string;
+    userId: string;
+    teamName: string;
+    totalPoints: number;
+    weeklyWins: number;
+    dgeCount: number;
+  }>;
+}
+
+export interface WeeklyWinner {
+  raceId: string;
+  raceName: string;
+  round: number;
+  winners: Array<{
+    leagueMemberId: string;
+    teamName: string;
+    score: number;
+  }>;
+}

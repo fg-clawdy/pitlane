@@ -6,7 +6,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import ScoringService from './scoring.service';
-import { StandingsEntry } from './types';
+import { StandingsEntry, SeasonPodium, WeeklyWinner } from './types';
 
 export class ScoringController {
   private scoringService: ScoringService;
@@ -116,6 +116,87 @@ export class ScoringController {
     try {
       await this.scoringService.recalculateAllLeagueScores(leagueId);
       return { success: true, message: 'Scores recalculated successfully' };
+    } catch (error) {
+      reply.code(500);
+      throw error;
+    }
+  }
+
+  /**
+   * Get season podium for a league
+   * GET /api/v1/leagues/:id/podium
+   */
+  async getSeasonPodium(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply
+  ): Promise<SeasonPodium> {
+    const { id: leagueId } = request.params;
+
+    try {
+      const podium = await this.scoringService.getSeasonPodium(leagueId);
+      return podium;
+    } catch (error) {
+      reply.code(500);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all weekly winners for a league
+   * GET /api/v1/leagues/:id/weekly-winners
+   */
+  async getWeeklyWinners(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply
+  ): Promise<{ weeklyWinners: WeeklyWinner[] }> {
+    const { id: leagueId } = request.params;
+
+    try {
+      const weeklyWinners = await this.scoringService.getWeeklyWinners(leagueId);
+      return { weeklyWinners };
+    } catch (error) {
+      reply.code(500);
+      throw error;
+    }
+  }
+
+  /**
+   * Get weekly winner for a specific race
+   * GET /api/v1/leagues/:id/races/:round/weekly-winner
+   */
+  async getRaceWeeklyWinner(
+    request: FastifyRequest<{ Params: { id: string; round: string } }>,
+    reply: FastifyReply
+  ): Promise<{ weeklyWinner: WeeklyWinner | null }> {
+    const { id: leagueId, round } = request.params;
+
+    try {
+      // Get the league to find season
+      const league = await this.prisma.league.findUnique({
+        where: { id: leagueId },
+        include: { season: true },
+      });
+
+      if (!league) {
+        reply.code(404);
+        throw new Error('League not found');
+      }
+
+      // Get the race by round
+      const race = await this.prisma.race.findFirst({
+        where: {
+          seasonId: league.seasonId,
+          round: parseInt(round, 10),
+        },
+      });
+
+      if (!race) {
+        reply.code(404);
+        throw new Error('Race not found');
+      }
+
+      const weeklyWinner = await this.scoringService.getWeeklyWinnerForRace(leagueId, race.id);
+      return { weeklyWinner };
     } catch (error) {
       reply.code(500);
       throw error;

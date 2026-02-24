@@ -17,10 +17,10 @@ Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 11 / 49 (22%)
+Stories Completed: 12 / 49 (24%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░] 22%
+[▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░] 24%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -34,6 +34,7 @@ Completed Stories:
 - US-016: Scoring Engine - FIA Official ✓
 - US-017: Scoring Engine - Linear 20-Point ✓
 - US-018: Scoring Engine - Proprietary ✓
+- US-020: Weekly Winners & Season Podium ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
@@ -44,7 +45,6 @@ Pending Stories (by priority):
 - US-014: Driver Substitution After Draft Lock (Priority 2)
 - US-015: Missed Pick Resolution (Priority 2)
 - US-019: Double Goose Egg (DGE) Tracking (Priority 2)
-- US-020: Weekly Winners & Season Podium (Priority 1)
 - US-021: League Standings View (Priority 1, depends on US-019, US-020)
 - US-022: Live Draft Board (WebSocket) (Priority 1, depends on US-012)
 - US-023: HTML5 Web Push Notifications (Priority 2)
@@ -75,7 +75,43 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-020 (Weekly Winners & Season Podium) - Priority 1 with met dependencies
+Next Story: US-019 (Double Goose Egg Tracking) - Priority 2 with met dependencies
+
+---
+
+## 2026-02-23T22:23:00Z - US-020 - Weekly Winners & Season Podium
+
+**What was implemented:**
+- Season podium method returning top 3 by cumulative points with isCompleted flag
+- Weekly winners tracking already implemented via isWeeklyWinner flag on RaceScore
+- API endpoints for season podium, weekly winners list, and race-specific weekly winner
+- Season completion detection (all races have results)
+- Historical season data preserved (all race scores stored permanently)
+
+**Files changed:**
+- apps/api/src/modules/scoring/types.ts - Added SeasonPodium and WeeklyWinner interfaces
+- apps/api/src/modules/scoring/scoring.service.ts - Added getSeasonPodium, getWeeklyWinners, getWeeklyWinnerForRace methods
+- apps/api/src/modules/scoring/scoring.controller.ts - Added controller methods for new endpoints
+- apps/api/src/modules/scoring/scoring.routes.ts - Added routes for podium and weekly winners
+
+**Learnings for future iterations:**
+- Weekly winner is already tracked via isWeeklyWinner boolean on RaceScore model
+- Season podium returns top 3 (or fewer if league has less members)
+- Season is considered complete when all races in the season have results
+- Ties are allowed for weekly winners (multiple isWeeklyWinner=true per race)
+- Standings already include totalPoints, weeklyWins, and dgeCount from LeagueMemberStat
+
+**Gotchas encountered:**
+- None - straightforward implementation building on existing scoring infrastructure
+
+**Useful context:**
+- API endpoints:
+  - GET /api/v1/leagues/:id/standings - Get full league standings
+  - GET /api/v1/leagues/:id/podium - Get season podium (top 3)
+  - GET /api/v1/leagues/:id/weekly-winners - Get all weekly winners for a league
+  - GET /api/v1/leagues/:id/races/:round/weekly-winner - Get weekly winner for specific race
+  - GET /api/v1/leagues/:id/races/:round/scores - Get all scores for a race
+- TypeScript compiles successfully with all changes
 
 ---
 

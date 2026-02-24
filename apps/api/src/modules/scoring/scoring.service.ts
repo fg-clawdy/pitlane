@@ -13,6 +13,8 @@ import {
   ScoringConfig,
   SCORING_CONFIGS,
   StandingsEntry,
+  SeasonPodium,
+  WeeklyWinner,
 } from './types';
 
 export class ScoringService {
@@ -477,6 +479,127 @@ export class ScoringService {
     }
 
     console.log(`[ScoringService] Recalculated scores for league ${leagueId}`);
+  }
+
+  /**
+   * Get season podium for a league (top 3 by cumulative points)
+   */
+  async getSeasonPodium(leagueId: string): Promise<SeasonPodium> {
+    // Get league with season info
+    const league = await this.prisma.league.findUnique({
+      where: { id: leagueId },
+      include: { season: true },
+    });
+
+    if (!league) {
+      throw new Error('League not found');
+    }
+
+    // Check if season is completed (all races have results)
+    const seasonRaces = await this.prisma.race.findMany({
+      where: { seasonId: league.seasonId },
+      include: { results: true },
+    });
+
+    const isCompleted = seasonRaces.length > 0 && 
+      seasonRaces.every(race => race.results.length > 0);
+
+    // Get standings
+    const standings = await this.getLeagueStandings(leagueId);
+
+    // Get top 3 (or fewer if not enough members)
+    const podium = standings.slice(0, 3).map((entry, index) => ({
+      position: index + 1,
+      leagueMemberId: entry.leagueMemberId,
+      userId: entry.userId,
+      teamName: entry.teamName,
+      totalPoints: entry.totalPoints,
+      weeklyWins: entry.weeklyWins,
+      dgeCount: entry.dgeCount,
+    }));
+
+    return {
+      seasonId: league.seasonId,
+      seasonYear: league.season.year,
+      isCompleted,
+      podium,
+    };
+  }
+
+  /**
+   * Get all weekly winners for a league
+   */
+  async getWeeklyWinners(leagueId: string): Promise<WeeklyWinner[]> {
+    // Get all race scores with weekly winners
+    const weeklyWinnerScores = await this.prisma.raceScore.findMany({
+      where: {
+        leagueId,
+        isWeeklyWinner: true,
+      },
+      include: {
+        race: true,
+        leagueMember: true,
+      },
+      orderBy: {
+        race: { round: 'asc' },
+      },
+    });
+
+    // Group by race
+    const raceMap = new Map<string, WeeklyWinner>();
+
+    for (const score of weeklyWinnerScores) {
+      const raceId = score.raceId;
+      
+      if (!raceMap.has(raceId)) {
+        raceMap.set(raceId, {
+          raceId,
+          raceName: score.race.raceName,
+          round: score.race.round,
+          winners: [],
+        });
+      }
+
+      raceMap.get(raceId)!.winners.push({
+        leagueMemberId: score.leagueMemberId,
+        teamName: score.leagueMember.teamName,
+        score: score.totalScore,
+      });
+    }
+
+    return Array.from(raceMap.values()).sort((a, b) => a.round - b.round);
+  }
+
+  /**
+   * Get weekly winner for a specific race
+   */
+  async getWeeklyWinnerForRace(leagueId: string, raceId: string): Promise<WeeklyWinner | null> {
+    const winnerScores = await this.prisma.raceScore.findMany({
+      where: {
+        leagueId,
+        raceId,
+        isWeeklyWinner: true,
+      },
+      include: {
+        race: true,
+        leagueMember: true,
+      },
+    });
+
+    if (winnerScores.length === 0) {
+      return null;
+    }
+
+    return {
+      raceId,
+      raceName: winnerScores[0].race.raceName,
+      round: winnerScores[0].race.round,
+      winners: winnerScores.map(score => ({
+        leagueMemberId: score.leagueMemberId,
+        teamName: score.leagueMember.teamName,
+        score: score.totalScore,
+      })),
+    };
   }
 }
 

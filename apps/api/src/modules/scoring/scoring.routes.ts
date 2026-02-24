@@ -31,6 +31,33 @@ export async function scoringRoutes(fastify: FastifyInstance) {
     );
   });
 
+  // Get season podium for a league
+  // GET /api/v1/leagues/:id/podium
+  fastify.get('/leagues/:id/podium', async (request, reply) => {
+    return controller.getSeasonPodium(
+      request as any,
+      reply
+    );
+  });
+
+  // Get all weekly winners for a league
+  // GET /api/v1/leagues/:id/weekly-winners
+  fastify.get('/leagues/:id/weekly-winners', async (request, reply) => {
+    return controller.getWeeklyWinners(
+      request as any,
+      reply
+    );
+  });
+
+  // Get weekly winner for a specific race
+  // GET /api/v1/leagues/:id/races/:round/weekly-winner
+  fastify.get('/leagues/:id/races/:round/weekly-winner', async (request, reply) => {
+    return controller.getRaceWeeklyWinner(
+      request as any,
+      reply
+    );
+  });
+
   // Admin: Calculate scores for a race
   // POST /api/v1/admin/scoring/calculate/:raceId
   fastify.post('/admin/scoring/calculate/:raceId', async (request, reply) => {
