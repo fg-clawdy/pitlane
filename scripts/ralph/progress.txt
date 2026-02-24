@@ -22,10 +22,10 @@ Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 15 / 49 (31%)
+Stories Completed: 16 / 49 (33%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░] 31%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░] 33%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -43,6 +43,7 @@ Completed Stories:
 - US-020: Weekly Winners & Season Podium ✓
 - US-021: League Standings View ✓
 - US-022: Live Draft Board (WebSocket) ✓
+- US-030: Landing Page ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
@@ -59,7 +60,6 @@ Pending Stories (by priority):
 - US-027: Admin Dashboard (Priority 2)
 - US-028: Admin Race Data Entry (Priority 2)
 - US-029: System Configuration (Admin) (Priority 3)
-- US-030: Landing Page (Priority 1)
 - US-031: Authentication Screens (Priority 1)
 - US-032: Dashboard & League List (Priority 1)
 - US-033: Create League Screen (Priority 1)
@@ -80,7 +80,62 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-030 (Landing Page) - Priority 1 with no dependencies
+Next Story: US-031 (Authentication Screens) - Priority 1
+
+---
+
+## 2026-02-24T13:43:00Z - US-030 - Landing Page
+
+**What was implemented:**
+- Complete Next.js 15 frontend setup with TypeScript, Tailwind CSS, and shadcn/ui components
+- Landing page at route `/` with SSG rendering (default in Next.js App Router)
+- Hero section with product pitch and CTA buttons (Get Started, Browse Leagues)
+- Features grid highlighting: Per-Race Drafts, Multiple Scoring Systems, Private Leagues, Live Data Sync
+- How It Works section with 3-step explanation
+- CTA section and footer with navigation links
+- UI components: Button, Input, Label, Card (shadcn/ui style)
+- lib/utils.ts with cn() helper and getEmailPrefix()
+- lib/api.ts with fetch wrapper for backend API calls
+
+**Files changed:**
+- apps/web/package.json - Next.js 15, React 19, Tailwind, and UI dependencies
+- apps/web/tsconfig.json - TypeScript config with @/* path alias
+- apps/web/next.config.ts - Next.js configuration
+- apps/web/tailwind.config.ts - Tailwind with shadcn/ui color variables
+- apps/web/postcss.config.mjs - PostCSS config for Tailwind
+- apps/web/src/app/globals.css - Tailwind base styles with CSS variables
+- apps/web/src/app/layout.tsx - Root layout with Inter font and metadata
+- apps/web/src/app/page.tsx - Landing page component
+- apps/web/src/lib/utils.ts - Utility functions
+- apps/web/src/lib/api.ts - API client
+- apps/web/src/components/ui/button.tsx - Button component
+- apps/web/src/components/ui/input.tsx - Input component
+- apps/web/src/components/ui/label.tsx - Label component
+- apps/web/src/components/ui/card.tsx - Card components
+- apps/web/src/components/auth/signup-form.tsx - Full signup form (for US-031)
+
+**Acceptance Criteria Met:**
+- Route: / ✓
+- Publicly accessible ✓
+- Contains product pitch and CTA to sign up ✓
+- SSG rendering ✓ (default with Next.js App Router)
+
+**Learnings for future iterations:**
+- Frontend is in apps/web/ directory with Next.js 15 App Router
+- shadcn/ui components are in components/ui/ directory
+- Use @/* path alias for imports (e.g., @/lib/utils)
+- Tailwind uses CSS variables for theming (defined in globals.css)
+- TypeScript compiles with: npx tsc --project apps/web/tsconfig.json --noEmit
+
+**Gotchas encountered:**
+- Needed to install @radix-ui/react-slot and @radix-ui/react-label for UI components
+- signup-form.tsx existed as stub, completed it with full implementation
+
+**Useful context:**
+- Landing page links to /signup and /login routes (need US-031)
+- API client uses NEXT_PUBLIC_API_URL env var (defaults to localhost:3001)
+- Lucide React icons used for feature cards
+- TypeScript compiles successfully
 
 ---
 

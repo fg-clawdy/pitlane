@@ -887,9 +887,9 @@
       ],
       "dependencies": [],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Screen ID: SCR-001",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-24. SSG by default via Next.js App Router. Includes hero section, features grid, how-it-work steps, and CTA.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E landing page loads"]
     },
     {
