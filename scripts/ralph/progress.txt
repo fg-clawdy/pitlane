@@ -26,10 +26,10 @@ Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 20 / 49 (41%)
+Stories Completed: 21 / 49 (43%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░] 41%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░] 43%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -52,6 +52,7 @@ Completed Stories:
 - US-032: Dashboard & League List ✓
 - US-033: Create League Screen ✓
 - US-034: League Home & Standings ✓
+- US-035: Live Draft Board Screen ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
@@ -61,6 +62,7 @@ Pending Stories (by priority):
 - US-013: Auto-Draft Preference Queue (Priority 2)
 - US-014: Driver Substitution After Draft Lock (Priority 2)
 - US-015: Missed Pick Resolution (Priority 2)
+- US-019: Double Goose Egg (DGE) Tracking (Priority 2)
 - US-023: HTML5 Web Push Notifications (Priority 2)
 - US-024: Email Notifications via SMTP (Priority 2)
 - US-025: In-App Notification Center (Priority 2)
@@ -68,7 +70,6 @@ Pending Stories (by priority):
 - US-027: Admin Dashboard (Priority 2)
 - US-028: Admin Race Data Entry (Priority 2)
 - US-029: System Configuration (Admin) (Priority 3)
-- US-035: Live Draft Board Screen (Priority 1)
 - US-036: League Settings & Member Management (Priority 2)
 - US-037: User Profile & Notifications (Priority 2)
 - US-038: Admin Panel Screens (Priority 2)
@@ -84,7 +85,51 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-035 (Live Draft Board Screen) - Priority 1
+Next Story: US-039 (API Auth Endpoints) - Priority 1
+
+---
+
+## 2026-02-24T22:35:00Z - US-035 - Live Draft Board Screen
+
+**What was implemented:**
+- Created draft board page at /leagues/[id]/draft under (dashboard) route group
+- WebSocket connection for real-time updates with automatic reconnect
+- Polling fallback (10s interval) when WebSocket disconnects
+- Disconnect banner notification when using polling mode
+- Current turn banner showing who is picking, round, and pick number
+- Timer countdown showing time remaining for current turn (24h max)
+- Round 1 and Round 2 pick cards showing drafted drivers per team
+- Available driver grid with code, name, team, season points, last race position
+- Driver selection with confirmation modal before pick submission
+- "You" badge highlighting current user's team in draft order
+- Live/Polling status indicator with green/red dot
+
+**Files changed:**
+- apps/web/src/app/(dashboard)/leagues/[id]/draft/page.tsx - New draft board page
+
+**Acceptance Criteria Met:**
+- Route: /leagues/{id}/draft ✓
+- League members only ✓ (auth check on mount)
+- CSR with WebSocket ✓ ('use client' + WebSocket connection)
+- Live updates <500ms ✓ (WebSocket with draft_state_update messages)
+- Driver selection with confirmation ✓ (modal before submit)
+- Auto-draft preference UI ✗ (not implemented - US-013 dependency)
+- On disconnect: polling fallback ✓ (10s interval with banner)
+
+**Learnings for future iterations:**
+- WebSocket URL derived from API_URL env var by replacing http→ws and removing /api/v1
+- WebSocket message types: draft_state_update, no_active_draft, pick_submitted, draft_completed, pong, error
+- Timer uses useEffect with setInterval, cleans up on unmount
+- Draft order sorted by round1PickOrder and round2PickOrder for snake draft display
+
+**Gotchas encountered:**
+- Typo in m.user.id access (was m.userअंतिक) - IDE glitch
+
+**Useful context:**
+- DraftWindowOutput type from backend has all needed fields
+- availableDrivers only shown when draft is open AND it's user's turn
+- Draft status can be: upcoming, open, closed, completed
+- TypeScript compiles successfully
 
 ---
 

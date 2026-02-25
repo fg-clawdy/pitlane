@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
+import rateLimit from '@fastify/rate-limit';
 import { authRoutes } from './modules/auth/auth.routes';
 import { userRoutes } from './modules/users/users.routes';
 import { f1dataRoutes } from './modules/f1data/f1data.routes';
@@ -18,6 +19,12 @@ const fastify = Fastify({
 
 // Register WebSocket support
 fastify.register(websocket);
+
+// Register rate limiting
+fastify.register(rateLimit, {
+  max: 100,
+  timeWindow: '15 minutes',
+});
 
 // Register CORS
 fastify.register(require('@fastify/cors'), {

@@ -24,6 +24,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^10.3.0",
     "@fastify/websocket": "^11.2.0"
   }
 }
