@@ -17,15 +17,19 @@
 - DGE (Double Goose Egg) tracking is built into the scoring calculation and persisted to RaceScore
 - Draft pick WebSocket broadcasting via DraftsService.registerWebSocketClient/unregisterWebSocketClient
 - sharedDraftsService in drafts.instance.ts ensures same service instance for HTTP routes and WebSocket handlers
+- Frontend uses Next.js 15 App Router with route groups: (auth) for unauthenticated, (dashboard) for authenticated
+- Auth token stored in sessionStorage, checked client-side in page components
+- Use @/* path alias for imports (e.g., @/lib/utils, @/components/ui/button)
+- api() function from lib/api.ts takes generic type, options with method, body, token
 
 Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 17 / 49 (35%)
+Stories Completed: 19 / 49 (39%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░] 35%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░] 39%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -45,6 +49,8 @@ Completed Stories:
 - US-022: Live Draft Board (WebSocket) ✓
 - US-030: Landing Page ✓
 - US-031: Authentication Screens ✓
+- US-032: Dashboard & League List ✓
+- US-033: Create League Screen ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
@@ -61,8 +67,6 @@ Pending Stories (by priority):
 - US-027: Admin Dashboard (Priority 2)
 - US-028: Admin Race Data Entry (Priority 2)
 - US-029: System Configuration (Admin) (Priority 3)
-- US-032: Dashboard & League List (Priority 1)
-- US-033: Create League Screen (Priority 1)
 - US-034: League Home & Standings (Priority 1)
 - US-035: Live Draft Board Screen (Priority 1)
 - US-036: League Settings & Member Management (Priority 2)
@@ -80,7 +84,86 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-032 (Dashboard & League List) - Priority 1
+Next Story: US-034 (League Home & Standings) - Priority 1
+
+---
+
+## 2026-02-24T22:10:00Z - US-033 - Create League Screen
+
+**What was implemented:**
+- Created Select UI component for dropdowns (native HTML select styled with Tailwind)
+- Created CreateLeagueForm component with react-hook-form + zod validation
+- Created /leagues/create page route under (dashboard) route group
+- Form includes all league settings: name, scoringType, draftType, visibility, joinApprovalRequired, targetPlayers, maxPlayers, missedPickResolution, substitutionPolicy
+- Form fetches current season ID from API before creating league
+- Client-side auth check redirects to /login if no token
+- Form shows conditional joinApprovalRequired checkbox for public leagues
+
+**Files changed:**
+- apps/web/src/components/ui/select.tsx - New Select component
+- apps/web/src/components/leagues/create-league-form.tsx - CreateLeagueForm component
+- apps/web/src/app/(dashboard)/leagues/create/page.tsx - Create league page
+
+**Acceptance Criteria Met:**
+- Route: /leagues/create ✓
+- Authenticated users ✓ (token check in useEffect)
+- CSR rendering ✓ ('use client' directive)
+- Form with all league settings ✓ (all fields from CreateLeagueInput)
+- Validation on all fields ✓ (zod schema with min/max constraints)
+
+**Learnings for future iterations:**
+- api() function takes generic type as first param, options object as second
+- Use { token } shorthand for Authorization header in api options
+- Select component uses native HTML select styled with Tailwind
+- League form needs seasonId from API - fetch current year season first
+
+**Gotchas encountered:**
+- api() doesn't have .get/.post methods - use single function with method in options
+- Conditional visibility checkbox (joinApprovalRequired) only shown for public leagues
+
+**Useful context:**
+- League components live in components/leagues/ directory
+- All league settings have sensible defaults (proprietary scoring, snake draft, private)
+- TypeScript compiles successfully
+
+---
+
+## 2026-02-24T17:28:00Z - US-032 - Dashboard & League List
+
+**What was implemented:**
+- Dashboard layout for authenticated routes in (dashboard) route group
+- Dashboard page at /dashboard showing user's leagues with commissioner badge
+- Leagues page at /leagues showing both user's leagues and available public leagues
+- Client-side auth check redirects to /login if no token in sessionStorage
+- Quick actions section for creating leagues, browsing leagues, and profile settings
+- Empty state with CTAs when user has no leagues
+- Navigation header with Dashboard, Leagues, Settings links and Logout button
+
+**Files changed:**
+- apps/web/src/app/(dashboard)/layout.tsx - Dashboard layout with nav header
+- apps/web/src/app/(dashboard)/dashboard/page.tsx - Dashboard page component
+- apps/web/src/app/(dashboard)/leagues/page.tsx - Leagues list page component
+
+**Acceptance Criteria Met:**
+- Routes: /dashboard, /leagues ✓
+- Authenticated users ✓ (token check in useEffect)
+- SSR rendering ✓ (Next.js App Router default with client-side data fetching)
+- Shows user's leagues with status ✓ (league cards with scoring type, draft type, visibility)
+
+**Learnings for future iterations:**
+- Dashboard routes are in apps/web/src/app/(dashboard)/ directory
+- Use 'use client' directive for components using useEffect, useState, useRouter
+- Auth token retrieved from sessionStorage and passed to API calls
+- League cards show isCommissioner badge, member count, scoring/draft type
+
+**Gotchas encountered:**
+- Layout needed 'use client' and useRouter for logout button navigation
+- Must use router.push() for client-side navigation in logout handler
+
+**Useful context:**
+- Dashboard shows user's leagues, quick actions (browse, create, settings)
+- Leagues page separates user's leagues from public leagues
+- TypeScript compiles successfully with all changes
 
 ---
 
@@ -212,7 +295,7 @@ Next Story: US-032 (Dashboard & League List) - Priority 1
 **Learnings for future iterations:**
 - WebSocket route must be registered separately from HTTP routes with { websocket: true } option
 - sharedDraftsService ensures both HTTP pick submission and WebSocket handlers use same client registry
-- WebSocket endpoint: /ws/leagues/:id/draft
+- WebSocket endpoint: /ws/leagues/{id}/draft
 - Message types: draft_state_update, no_active_draft, pick_submitted, draft_completed, ping, pong, get_state
 - Client can request fresh state with { type: 'get_state' } message
 
@@ -270,445 +353,5 @@ Next Story: US-032 (Dashboard & League List) - Priority 1
   - GET /api/v1/leagues/:id/standings-view - Full view with draft status
   - GET /api/v1/leagues/:id/members/:memberId/history - Race history with driver details
 - TypeScript compiles successfully with all changes
-
----
-
-## 2026-02-23T22:37:00Z - US-019 - Double Goose Egg (DGE) Tracking
-
-**What was implemented:**
-- Added isDGE boolean field to RaceScore model in Prisma schema
-- DGE detection already implemented in scoring service (both drivers score 0 AND both had actual drivers)
-- isDGE now persisted to RaceScore table for historical tracking per race
-- dgeCount already tracked in LeagueMemberStat (incremented when isDGE=true)
-- Admin overrides trigger recalculation which updates DGE stats
-- DGE displayed prominently in standings via dgeCount field
-
-**Files changed:**
-- apps/api/prisma/schema.prisma - Added isDGE boolean to RaceScore model
-- apps/api/src/modules/scoring/scoring.service.ts - Updated saveRaceScores to persist isDGE
-
-**Acceptance Criteria Met:**
-- DGE occurs when BOTH drafted drivers score 0 points ✓
-- DGE only applies to actual drivers, not no_pick ✓ (checked via driver1Id !== null && driver2Id !== null)
-- dge_count persisted per player per league across season ✓ (LeagueMemberStat.dgeCount)
-- Displayed prominently in standings as DGE count ✓ (StandingsEntry.dgeCount)
-- Admin overrides retroactively recalculate DGE stats ✓ (recalculateAllLeagueScores)
-
-**Learnings for future iterations:**
-- DGE = Double Goose Egg (🥚🥚) - both drivers score 0 points
-- isDGE on RaceScore allows historical tracking per race
-- dgeCount on LeagueMemberStat aggregates across season
-- DGE does NOT apply when a player has no_pick (null driver) - only when both actual drivers score 0
-
-**Gotchas encountered:**
-- None - straightforward enhancement to existing scoring infrastructure
-
-**Useful context:**
-- DGE is calculated during score calculation and persisted atomically
-- Standings include dgeCount from LeagueMemberStat
-- TypeScript compiles successfully with all changes
-
----
-
-## 2026-02-23T22:23:00Z - US-020 - Weekly Winners & Season Podium
-
-**What was implemented:**
-- Season podium method returning top 3 by cumulative points with isCompleted flag
-- Weekly winners tracking already implemented via isWeeklyWinner flag on RaceScore
-- API endpoints for season podium, weekly winners list, and race-specific weekly winner
-- Season completion detection (all races have results)
-- Historical season data preserved (all race scores stored permanently)
-
-**Files changed:**
-- apps/api/src/modules/scoring/types.ts - Added SeasonPodium and WeeklyWinner interfaces
-- apps/api/src/modules/scoring/scoring.service.ts - Added getSeasonPodium, getWeeklyWinners, getWeeklyWinnerForRace methods
-- apps/api/src/modules/scoring/scoring.controller.ts - Added controller methods for new endpoints
-- apps/api/src/modules/scoring/scoring.routes.ts - Added routes for podium and weekly winners
-
-**Learnings for future iterations:**
-- Weekly winner is already tracked via isWeeklyWinner boolean on RaceScore model
-- Season podium returns top 3 (or fewer if league has less members)
-- Season is considered complete when all races in the season have results
-- Ties are allowed for weekly winners (multiple isWeeklyWinner=true per race)
-- Standings already include totalPoints, weeklyWins, and dgeCount from LeagueMemberStat
-
-**Gotchas encountered:**
-- None - straightforward implementation building on existing scoring infrastructure
-
-**Useful context:**
-- API endpoints:
-  - GET /api/v1/leagues/:id/standings - Get full league standings
-  - GET /api/v1/leagues/:id/podium - Get season podium (top 3)
-  - GET /api/v1/leagues/:id/weekly-winners - Get all weekly winners for a league
-  - GET /api/v1/leagues/:id/races/:round/weekly-winner - Get weekly winner for specific race
-  - GET /api/v1/leagues/:id/races/:round/scores - Get all scores for a race
-- TypeScript compiles successfully with all changes
-
----
-
-## 2026-02-23T22:12:00Z - US-012 - Draft Pick Submission
-
-**What was implemented:**
-- Pick submission endpoint with full validation (driver available, player's turn, window open)
-- Available drivers now include season points and last race position for informed drafting
-- WebSocket broadcasting infrastructure for real-time draft updates (< 500ms latency target)
-- PickSubmittedPayload type for structured WebSocket messages
-- Automatic turn advancement after pick submission
-- Draft completion detection and status update
-
-**Files changed:**
-- apps/api/src/modules/drafts/types.ts - Added DraftWebSocketMessage, PickSubmittedPayload, enhanced AvailableDriver type
-- apps/api/src/modules/drafts/drafts.service.ts - Added WebSocket client management, broadcasting, season points for drivers
-- apps/api/src/modules/drafts/drafts.routes.ts - Routes already existed for pick submission
-
-**Learnings for future iterations:**
-- DraftsService has WebSocket client management: registerWebSocketClient(leagueId, client), unregisterWebSocketClient(leagueId, client)
-- Broadcast format: { type: 'pick_submitted' | 'draft_completed', payload: PickSubmittedPayload, timestamp: Date }
-- Available drivers now show seasonPoints and lastRacePosition for draft strategy
-- Turn advances automatically after each pick, draft completes when all picks submitted
-
-**Gotchas encountered:**
-- Driver season points require querying all race results - could be optimized with caching
-- WebSocket infrastructure is in place but actual WebSocket route needs to be added to index.ts
-
-**Useful context:**
-- API endpoint: POST /api/v1/drafts/:draftId/picks - Submit a pick
-- WebSocket clients are managed per league ID for targeted broadcasting
-- Pick validation checks: driver exists, not already picked, player's turn, window open, member hasn't picked in this round
-- TypeScript compiles successfully with all changes
-
----
-
-## 2026-02-23T21:55:00Z - US-011 - Draft Window Lifecycle
-
-**What was implemented:**
-- Complete draft module with types, service, controller, and routes
-- Draft window opens Monday 00:00 GMT of race week
-- Draft closes at qualifying start time OR when all picks submitted
-- 24-hour turn timer for each player
-- Snake and regular draft types supported
-- Draft order based on join order (randomizable via league setting)
-- Auto-complete when all players submit both picks
-- Missed pick resolution (random, top_points, no_pick)
-- Admin endpoints for opening/closing windows and resolving missed picks
-
-**Files changed:**
-- apps/api/src/modules/drafts/types.ts - Draft types, interfaces, and helper functions
-- apps/api/src/modules/drafts/drafts.service.ts - Draft service with lifecycle logic
-- apps/api/src/modules/drafts/drafts.controller.ts - HTTP handlers for draft endpoints
-- apps/api/src/modules/drafts/drafts.routes.ts - Fastify routes for drafts
-- apps/api/src/index.ts - Added drafts routes registration
-
-**Learnings for future iterations:**
-- Draft module is in modules/drafts/ directory
-- Draft window opensAt = Monday 00:00 GMT of race week (calculateDraftOpenTime helper)
-- Draft window closesAt = day before race at 14:00 UTC (calculateDraftCloseTime helper)
-- Draft order is based on join order for now (TODO: store randomized order in DB)
-- Snake draft reverses order for Round 2
-- Turn expiry is 24 hours from last pick or window open time
-- Draft status: upcoming → open → closed/completed
-- All picks must be submitted for draft to be "completed"
-
-**Gotchas encountered:**
-- Fastify route handler generics cause type errors - use generic FastifyRequest in controller methods and cast params/body with `as` keyword
-- Must use wrapper functions in routes file to avoid generic type issues with Fastify
-
-**Useful context:**
-- API endpoints:
-  - GET /api/v1/leagues/:id/drafts - Get all draft windows for a league
-  - GET /api/v1/leagues/:id/drafts/current - Get current draft window
-  - GET /api/v1/drafts/:draftId - Get draft window by ID
-  - GET /api/v1/drafts/:draftId/state - Get draft state
-  - POST /api/v1/drafts/:draftId/picks - Submit a pick
-  - POST /api/v1/admin/drafts/open-scheduled - Open scheduled windows
-  - POST /api/v1/admin/drafts/close-expired - Close expired windows
-  - POST /api/v1/admin/drafts/create-for-race/:raceId - Create draft windows for race
-  - POST /api/v1/admin/drafts/:draftId/resolve-missed/:leagueMemberId - Resolve missed pick
-- US-017 and US-018 were already implemented as part of US-016 (all three scoring systems)
-- TypeScript compiles successfully with all changes
-
----
-
-## 2026-02-23T17:32:00Z - US-016 - Scoring Engine - FIA Official
-
-**What was implemented:**
-- Complete scoring engine with support for all three scoring systems (fia_official, linear_20, proprietary)
-- FIA official scoring: positions 1-10 score 25,18,15,12,10,8,6,4,2,1 points, positions 11-20 score 0
-- Fastest lap bonus (+1) for FIA scoring if driver finishes in top 10
-- Linear 20-point scoring: 1st=20pts, declining by 1 per position to 20th=1pt
-- Proprietary scoring: max(0, 10 - abs(position - 10)) - peaks at position 10 with 10 points
-- Finish status handling: DNF, DNS, DSQ all score 0
-- Player race score = Driver 1 score + Driver 2 score
-- Double Goose Egg (DGE) detection when both drivers score 0
-- Weekly winner determination (highest score, ties allowed)
-- League standings calculation with total points, weekly wins, DGE count
-- Score recalculation for admin overrides
-- API endpoints for standings and race scores
-
-**Files changed:**
-- apps/api/src/modules/scoring/types.ts - Scoring types, interfaces, and scoring tables
-- apps/api/src/modules/scoring/scoring.service.ts - Core scoring logic and calculations
-- apps/api/src/modules/scoring/scoring.controller.ts - HTTP handlers for scoring endpoints
-- apps/api/src/modules/scoring/scoring.routes.ts - Fastify routes for scoring
-- apps/api/src/index.ts - Added scoring routes registration
-
-**Learnings for future iterations:**
-- Scoring module is in modules/scoring/ directory
-- All three scoring types are implemented in one service for consistency
-- SCORING_CONFIGS object contains configuration for all scoring types
-- Status normalization handles various status strings (Finished, DNF, DNS, DSQ, +1 LAP, etc.)
-- LeagueMemberStat is updated atomically with race scores
-- Weekly winners can be multiple (ties allowed)
-- DGE tracking is built into the scoring calculation
-
-**Gotchas encountered:**
-- Must pass PrismaClient to controller constructor for league/race lookups
-- Fastify request.server.prisma doesn't exist - need to pass prisma instance
-
-**Useful context:**
-- API endpoints:
-  - GET /api/v1/leagues/:id/standings - Get league standings
-  - GET /api/v1/leagues/:id/races/:round/scores - Get race scores
-  - POST /api/v1/admin/scoring/calculate/:raceId - Calculate scores for a race
-  - POST /api/v1/admin/scoring/recalculate/:leagueId - Recalculate all league scores
-- Score calculation is triggered after Jolpica race results import
-- TypeScript compiles successfully with all changes
-
----
-
-## 2026-02-23T17:10:00Z - US-009 - Join League
-
-**What was implemented:**
-- Join league directly (public leagues or via invite link)
-- Invite link system with 8-char random tokens, 7-day expiry, one-time use per user
-- Join request/approval flow for leagues requiring approval
-- Leave league functionality (commissioner cannot leave)
-- Member removal by commissioner
-- Team name validation (1-50 chars, unique within league)
-- Mid-season join cutoff (cannot join after 3 races completed)
-- User league limit enforcement (max 10 leagues per user)
-- Commissioner join request management (approve/reject)
-- Invite link management (create, list)
-
-**Files changed:**
-- apps/api/src/modules/leagues/types.ts - Added JoinLeagueInput, JoinRequestResponse, InviteLinkResponse, JoinViaInviteResponse
-- apps/api/src/modules/leagues/leagues.service.ts - Added joinLeague, joinViaInviteToken, leaveLeague, createInviteLink, getInviteLinks, getJoinRequests, resolveJoinRequest, getLeagueMembers, removeMember, getLeagueByInviteToken methods
-- apps/api/src/modules/leagues/leagues.controller.ts - Added handlers for all new endpoints
-- apps/api/src/modules/leagues/leagues.routes.ts - Added routes for join, leave, invite links, members, join requests
-
-**Learnings for future iterations:**
-- Invite tokens are 8 hex characters generated with crypto.randomBytes(4)
-- Commissioner is determined by first member (members[0] ordered by joinedAt)
-- System settings control invite_link_expiry_days (default 7) and max_join_cutoff_races (default 3)
-- Invite links track uses via InviteLinkUse table (one-time use per user)
-- Join requests use upsert to handle re-requests after rejection
-- League members are soft-deleted via leftAt timestamp (historical picks retained)
-- Team name uniqueness is per league, not global
-
-**Gotchas encountered:**
-- Commissioner cannot leave their own league - must transfer role or delete league
-- Must check both invite link validity AND league status (full, mid-season) before allowing join
-- Join approval creates a pending request, not immediate membership
-- Private leagues can only be joined via invite link, public leagues allow direct join
-
-**Useful context:**
-- API endpoints:
-  - POST /api/v1/leagues/:id/join - Join league directly
-  - POST /api/v1/leagues/:id/leave - Leave league
-  - GET /api/v1/join/:token - Preview league from invite link
-  - POST /api/v1/join/:token - Join via invite link
-  - POST /api/v1/leagues/:id/invite-links - Create invite link (commissioner)
-  - GET /api/v1/leagues/:id/invite-links - List invite links (commissioner)
-  - GET /api/v1/leagues/:id/members - Get league members
-  - DELETE /api/v1/leagues/:id/members/:memberId - Remove member (commissioner)
-  - GET /api/v1/leagues/:id/join-requests - List join requests (commissioner)
-  - PATCH /api/v1/leagues/:id/join-requests/:requestId - Approve/reject request (commissioner)
-- TypeScript compiles successfully with all changes
-
----
-
-## 2026-02-23T16:38:00Z - US-008 - Create League
-
-**What was implemented:**
-- League creation API with full settings support
-- Commissioner assignment (first member of league)
-- League name uniqueness validation per season
-- Max players validation (2-11 players)
-- User league limit enforcement (max 10 leagues per user)
-- Default team name from user profile
-- Public/Private league visibility
-- Get public leagues endpoint for discovery
-- Get user's leagues endpoint
-- Get league by ID endpoint with visibility checks
-
-**Files changed:**
-- apps/api/src/modules/leagues/types.ts - League types and interfaces
-- apps/api/src/modules/leagues/leagues.service.ts - League business logic
-- apps/api/src/modules/leagues/leagues.controller.ts - HTTP handlers for league endpoints
-- apps/api/src/modules/leagues/leagues.routes.ts - Fastify routes for leagues
-- apps/api/src/index.ts - Added leagues routes registration
-
-**Learnings for future iterations:**
-- Commissioner is determined by first member (members[0]) in the league
-- League name must be unique per season (seasonId_name unique constraint)
-- Max players is 2-11 (22 F1 drivers ÷ 2 per player)
-- Users can be members of up to 10 leagues simultaneously
-- League module is in modules/leagues/ directory
-- Route handlers cast request body/params to avoid Fastify generic type issues
-
-**Gotchas encountered:**
-- Fastify route handler generics cause type errors - cast request body/params with `as` keyword
-- Must use `!!` for boolean coercion when checking commissioner status
-- Private leagues require auth check before returning data
-
-**Useful context:**
-- League settings: scoringType, draftType, visibility, joinApprovalRequired, targetPlayers, maxPlayers, missedPickResolution, substitutionPolicy, draftOrderRandomized
-- Default scoring type is 'proprietary' (10th=10pts system)
-- Default draft type is 'snake'
-- Default visibility is 'private'
-- Team name defaults to user's defaultTeamName or generated from user ID
-- TypeScript compiles successfully with all changes
-
----
-
-## 2026-02-23T16:24:00Z - US-006 - Jolpica Race Results Import
-
-**What was implemented:**
-- Race results sync with position, Driver, Constructor, points, status, Time, FastestLap
-- Admin override field preservation when Jolpica data differs
-- Data discrepancy records creation for position, points, status, fastestLap fields
-- Commissioner notification when data discrepancies detected
-- Race results API endpoint: GET /seasons/:year/races/:round/results
-- Admin sync race results endpoint: POST /admin/sync-results/:year/:round
-
-**Files changed:**
-- apps/api/src/modules/f1data/jolpica-client.ts - Enhanced syncRaceResults with discrepancy tracking
-- apps/api/src/modules/f1data/f1data.service.ts - Added notifyCommissionersOfDiscrepancies, getRaceResults
-- apps/api/src/modules/f1data/f1data.controller.ts - Added getRaceResults, syncRaceResults handlers
-- apps/api/src/modules/f1data/f1data.routes.ts - Added results routes
-
-**Learnings for future iterations:**
-- Data discrepancy tracking compares each field individually (position, points, status, fastestLap)
-- Commissioner notifications use Notification model with type 'data_discrepancy'
-- RaceResultSyncOutput interface includes discrepancies array for tracking
-- League creators (first members) are considered commissioners for notifications
-- jolpicaValue on RaceResult stores the complete Jolpica response for audit
-
-**Gotchas encountered:**
-- Need to handle case where race has no leagues (no commissioners to notify)
-- Must return raceId from syncRaceResults for downstream processing
-
-**Useful context:**
-- Discrepancy notification includes raceId, raceName, discrepancyCount, and affected fields
-- Admin protected results are skipped during sync but discrepancies are logged
-- TypeScript compiles successfully with all changes
-
----
-
-## 2026-02-23T16:09:00Z - US-005 - Jolpica Data Import - Seasons and Races
-
-**What was implemented:**
-- Jolpica API client for F1 data (https://api.jolpi.ca/ergast/f1/)
-- Season sync on app startup for current year
-- Race sync with round, raceName, Circuit, date, time
-- Driver sync with driverId, permanentNumber, code, givenName, familyName, nationality, dateOfBirth
-- Race result polling logic (3 hours post-race start, every 2 hours, max 18 polls)
-- Admin alert creation when max polls reached without results
-- F1 data API endpoints: GET /seasons, GET /seasons/:year/races, GET /seasons/:year/races/:round, GET /seasons/:year/drivers
-- Admin sync endpoint: POST /admin/sync
-
-**Files changed:**
-- apps/api/src/modules/f1data/jolpica-client.ts - Jolpica API client with fetch methods and sync logic
-- apps/api/src/modules/f1data/f1data.service.ts - F1 data service with polling/retry logic
-- apps/api/src/modules/f1data/f1data.controller.ts - HTTP handlers for F1 data endpoints
-- apps/api/src/modules/f1data/f1data.routes.ts - Fastify routes for F1 data
-- apps/api/src/index.ts - Updated to register F1 data routes and sync on startup
-- apps/api/src/lib/auth.ts - Auth middleware for protected routes
-- apps/api/src/modules/users/users.controller.ts - User profile handlers
-- apps/api/src/modules/users/users.service.ts - User profile service
-- apps/api/src/modules/users/users.routes.ts - User profile routes
-- apps/api/src/modules/users/types.ts - TypeScript interfaces
-- apps/api/tsconfig.json - Disabled noUnusedLocals/noUnusedParameters
-
-**Learnings for future iterations:**
-- Jolpica API base URL: https://api.jolpi.ca/ergast/f1/
-- Jolpica response format: MRData wrapper with specific table names (RaceTable, DriverTable, etc.)
-- Current F1 season year is determined by checking if we're in Jan-Feb (use previous year) or March+ (current year)
-- Race results polling config is stored in SystemSetting table (jolpica_poll_start_hours_after_race, jolpica_poll_interval_hours, jolpica_max_polls)
-- Admin alerts are created as AuditLog entries with action 'jolpica_poll_failed'
-- F1 data module is in modules/f1data/ directory
-- TypeScript compile command from root: npx tsc --project apps/api/tsconfig.json
-
-**Gotchas encountered:**
-- Pre-existing files had syntax errors (auth.ts, users.controller.ts, users.service.ts, users.routes.ts) that needed fixing
-- Jolpica returns strings for all numeric values (position, points, round) - must parse to int/float
-- Race time is in UTC format "HH:MM:SSZ" - needs parsing
-- Prisma Json type requires proper serialization (JSON.parse(JSON.stringify(result)))
-- tsconfig noUnusedLocals was causing issues with generic type parameters
-
-**Useful context:**
-- Season sync automatically creates season if not exists
-- Race and driver sync uses upsert to handle both create and update
-- Admin protected results are not overwritten by Jolpica sync
-- Data discrepancies are logged when admin override exists
-- Fastify route handlers use { preHandler: authenticate } for protected routes
-- F1 data endpoints are public (no auth required)
-- Admin sync endpoint is open for now (should add auth later)
-
----
-
-## 2026-02-23T14:19:00Z - US-002 - User Login with Account Lockout
-
-**What was implemented:**
-- Complete authentication API with login, refresh, and logout endpoints
-- Account lockout system (5 failed attempts = 15 minute lock)
-- JWT token management with RS256 asymmetric encryption
-- Password hashing with bcrypt
-- Refresh token storage in httpOnly cookies
-- Fastify server setup with CORS and cookie support
-
-**Files changed:**
-- apps/api/prisma/schema.prisma - Added User, RefreshToken models
-- apps/api/src/lib/password.ts - Password hashing utilities
-- apps/api/src/lib/jwt.ts - JWT token generation and verification
-- apps/api/src/modules/auth/auth.controller.ts - Auth controller with login/refresh/logout
-- apps/api/src/modules/auth/auth.routes.ts - Auth routes
-- apps/api/src/modules/auth/auth.service.ts - Auth business logic
-- apps/api/src/modules/auth/types.ts - Auth types and interfaces
-- apps/api/src/index.ts - Main Fastify server
-- apps/api/package.json - API dependencies
-- apps/api/tsconfig.json - TypeScript configuration
-- apps/api/.env.example - Environment variables template
-- apps/api/README.md - API documentation
-
-**Learnings for future iterations:**
-- This codebase uses Fastify 5.x as the web framework (not Express)
-- Prisma ORM is used for database operations with PostgreSQL
-- JWT tokens use RS256 asymmetric encryption (private key for signing, public key for verification)
-- Access tokens are short-lived (15min) and stored in memory, refresh tokens are long-lived (30d) in httpOnly cookies
-- Account lockout is implemented with failed_attempts counter and locked_until timestamp
-- The API follows REST conventions with /api/v1 prefix
-- All auth endpoints are in modules/auth/ directory
-- Environment variables are managed via .env files
-- The project uses npm workspaces with apps/* structure
-
-**Gotchas encountered:**
-- Need to generate JWT keys using openssl before running the server
-- Fastify requires explicit registration of plugins like @fastify/cors and @fastify/cookie
-- Prisma client must be generated with `npm run db:generate` before running
-- Database schema must be pushed with `npm run db:push`
-- Cookie secret must be set for httpOnly cookies to work
-- CORS origin must match the frontend URL
-- npm install took longer than expected due to workspace dependencies
-
-**Useful context:**
-- The API server runs on port 3001 by default
-- Health check endpoint is at /health
-- Auth endpoints are under /api/v1/auth
-- Failed login attempts are tracked per user email
-- Lockout duration is 15 minutes (900000ms)
-- Failed attempts threshold is 5
-- All timestamps use JavaScript Date objects
-- Error responses follow a consistent format with message and optional details
 
 ---

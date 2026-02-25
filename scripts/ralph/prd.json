@@ -923,9 +923,9 @@
       ],
       "dependencies": ["US-002", "US-008", "US-009"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Screen IDs: SCR-010, SCR-011",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-24. Dashboard shows user's leagues with commissioner badge, quick actions for create/browse leagues. Leagues page shows both user's leagues and available public leagues.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -942,9 +942,9 @@
       ],
       "dependencies": ["US-008"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Screen ID: SCR-012",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-24. Route at /leagues/create with CreateLeagueForm component. All league settings with zod validation.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
