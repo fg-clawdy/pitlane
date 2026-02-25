@@ -960,9 +960,9 @@
       ],
       "dependencies": ["US-021"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Screen ID: SCR-013",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-24. Dynamic route at /leagues/[id] with standings table, current week draft status, and member list.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {

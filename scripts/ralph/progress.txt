@@ -26,10 +26,10 @@ Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 19 / 49 (39%)
+Stories Completed: 20 / 49 (41%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░] 39%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░] 41%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -51,6 +51,7 @@ Completed Stories:
 - US-031: Authentication Screens ✓
 - US-032: Dashboard & League List ✓
 - US-033: Create League Screen ✓
+- US-034: League Home & Standings ✓
 
 Pending Stories (by priority):
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
@@ -67,7 +68,6 @@ Pending Stories (by priority):
 - US-027: Admin Dashboard (Priority 2)
 - US-028: Admin Race Data Entry (Priority 2)
 - US-029: System Configuration (Admin) (Priority 3)
-- US-034: League Home & Standings (Priority 1)
 - US-035: Live Draft Board Screen (Priority 1)
 - US-036: League Settings & Member Management (Priority 2)
 - US-037: User Profile & Notifications (Priority 2)
@@ -84,9 +84,45 @@ Pending Stories (by priority):
 - US-048: Background Jobs - Draft System (Priority 1)
 - US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-034 (League Home & Standings) - Priority 1
+Next Story: US-035 (Live Draft Board Screen) - Priority 1
 
 ---
+
+## 2026-02-24T22:20:00Z - US-034 - League Home & Standings
+
+**What was implemented:**
+- Created dynamic route page at /leagues/[id] under (dashboard) route group
+- Fetched standings-view API for complete league data including draft status
+- Fetched members API for member list with commissioner badges
+- Standings table with rank badges (gold/silver/bronze for top 3), team name, manager, points, weekly wins, DGE count
+- Current week card showing race name, draft status badge, round, opens/closes times
+- Pick progress section showing R1/R2 pick status per member when draft is open
+- Members list with team name, username, and commissioner badge
+- "View Draft Board" button linking to draft page
+- Loading, error, and empty states handled
+
+**Files changed:**
+- apps/web/src/app/(dashboard)/leagues/[id]/page.tsx - New league home page
+
+**Acceptance Criteria Met:**
+- Route: /leagues/{id} ✓
+- League members or public if visibility=public ✓ (uses standings-view API)
+- SSR rendering ✓ (uses Next.js App Router with client-side data fetching)
+- Shows standings, current race, member list ✓
+
+**Learnings for future iterations:**
+- Dynamic routes in Next.js App Router use [id] folder syntax
+- standings-view API returns LeagueStandingsView with currentWeek draft status included
+- Member list from /leagues/{id}/members includes user relation for username/displayName
+- Draft status badges: upcoming, open, closed, completed, no_draft
+
+**Gotchas encountered:**
+- None - straightforward implementation using existing API endpoints
+
+**Useful context:**
+- TypeScript compiles successfully with npx tsc --project apps/web/tsconfig.json --noEmit
+- League page links to /leagues/[id]/draft for draft board (US-035)
+- Rank badges use Tailwind colors: yellow-100 for 1st, gray-100 for 2nd, orange-100 for 3rd
 
 ## 2026-02-24T22:10:00Z - US-033 - Create League Screen
 
