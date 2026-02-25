@@ -1,7 +1,51 @@
-export interface UserProfile {  id: string;  email: string;  username: string;  displayName: string | null;  defaultTeamName: string | null;  emailEnabled: boolean;  pushEnabled: boolean;  status: string;  role: string;  createdAt: Date;  updatedAt: Date;}
+export interface UserProfile {
+  id: string;
+  email: string;
+  username: string;
+  displayName: string | null;
+  defaultTeamName: string | null;
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  status: string;
+  role: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
-export interface UpdateProfileDto {  username?: string;  displayName?: string;  defaultTeamName?: string;  emailEnabled?: boolean;  pushEnabled?: boolean;}
+export interface UpdateProfileDto {
+  username?: string;
+  displayName?: string;
+  defaultTeamName?: string;
+  emailEnabled?: boolean;
+  pushEnabled?: boolean;
+}
 
-export interface ChangePasswordDto {  currentPassword: string;  newPassword: string;}
+export interface ChangePasswordDto {
+  currentPassword: string;
+  newPassword: string;
+}
 
-export interface PushSubscriptionDto {  endpoint: string;  p256dh: string;  auth: string;}
+export interface PushSubscriptionDto {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+export interface EmailChangeRequestDto {
+  newEmail: string;
+  password: string;
+}
+
+export interface EmailChangeResponse {
+  id: string;
+  newEmail: string;
+  currentEmail: string;
+  expiresAt: Date;
+  holdPeriodSeconds: number;
+  canWaive: boolean;
+}
+
+export interface EmailChangeStatus {
+  hasPendingRequest: boolean;
+  request: EmailChangeResponse | null;
+}

@@ -83,17 +83,104 @@ async function resolveMissedPickHandler(request: FastifyRequest, reply: FastifyR
 }
 
 /**
+ * GET /api/v1/users/me/auto-draft-preferences
+ * Get user's auto-draft preferences
+ */
+async function getAutoDraftPreferencesHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.getAutoDraftPreferences(request, reply);
+}
+
+/**
+ * PUT /api/v1/users/me/auto-draft-preferences
+ * Set user's auto-draft preferences
+ */
+async function setAutoDraftPreferencesHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.setAutoDraftPreferences(request, reply);
+}
+
+/**
  * Register draft routes
  */
 export async function draftsRoutes(fastify: FastifyInstance): Promise<void> {
   // League draft endpoints (require auth)
-  fastify.get('/leagues/:id/drafts', { preHandler: authenticate }, getLeagueDraftWindowsHandler);
-  fastify.get('/leagues/:id/drafts/current', { preHandler: authenticate }, getCurrentDraftWindowHandler);
+  fastify.get('/leagues/:id/drafts', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 60,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, getLeagueDraftWindowsHandler);
+
+  fastify.get('/leagues/:id/drafts/current', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 60,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, getCurrentDraftWindowHandler);
 
   // Draft window endpoints (require auth)
-  fastify.get('/drafts/:draftId', { preHandler: authenticate }, getDraftWindowHandler);
-  fastify.get('/drafts/:draftId/state', { preHandler: authenticate }, getDraftStateHandler);
-  fastify.post('/drafts/:draftId/picks', { preHandler: authenticate }, submitPickHandler);
+  fastify.get('/drafts/:draftId', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 60,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, getDraftWindowHandler);
+
+  fastify.get('/drafts/:draftId/state', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 60,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, getDraftStateHandler);
+
+  fastify.post('/drafts/:draftId/picks', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, submitPickHandler);
+
+  // Auto-draft preference endpoints (require auth)
+  fastify.get('/users/me/auto-draft-preferences', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, getAutoDraftPreferencesHandler);
+
+  fastify.put('/users/me/auto-draft-preferences', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, setAutoDraftPreferencesHandler);
 
   // Admin endpoints for draft management
   fastify.post('/admin/drafts/open-scheduled', openScheduledDraftWindowsHandler);

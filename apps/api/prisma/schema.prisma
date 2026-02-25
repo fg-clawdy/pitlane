@@ -236,12 +236,14 @@ model League {
 }
 
 model LeagueMember {
-  id          String   @id @default(cuid())
-  leagueId    String
-  userId      String
-  teamName    String
-  joinedAt    DateTime @default(now())
-  leftAt      DateTime?
+  id              String   @id @default(cuid())
+  leagueId        String
+  userId          String
+  teamName        String
+  round1PickOrder Int?
+  round2PickOrder Int?
+  joinedAt        DateTime @default(now())
+  leftAt          DateTime?
 
   league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)

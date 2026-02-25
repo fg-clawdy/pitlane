@@ -89,3 +89,32 @@ export interface JoinViaInviteResponse {
   joinRequest?: JoinRequestResponse;
   joined?: boolean;
 }
+
+export interface UpdateLeagueInput {
+  name?: string;
+  visibility?: Visibility;
+  joinApprovalRequired?: boolean;
+  targetPlayers?: number;
+  maxPlayers?: number;
+  missedPickResolution?: MissedPickResolution;
+  substitutionPolicy?: SubstitutionPolicy;
+}
+
+export interface UpdateDraftOrderInput {
+  memberIds: string[]; // Ordered list of member IDs for draft
+}
+
+export interface FlagIssueInput {
+  reason: string;
+  description?: string;
+}
+
+export interface CommissionerFlagResponse {
+  id: string;
+  leagueId: string;
+  userId: string;
+  reason: string;
+  description: string | null;
+  status: 'open' | 'investigating' | 'resolved' | 'dismissed';
+  createdAt: Date;
+}

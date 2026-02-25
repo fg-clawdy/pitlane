@@ -14,6 +14,9 @@ import {
   PickValidation,
   ResolutionMethod,
   PickSubmittedPayload,
+  AutoDraftPreferenceEntry,
+  AutoDraftPreferencesOutput,
+  SetAutoDraftPreferencesInput,
   calculateDraftOpenTime,
   calculateDraftCloseTime,
   DEFAULT_DRAFT_PICK_TIMEOUT_HOURS,
@@ -672,7 +675,7 @@ export class DraftsService {
   /**
    * Check if all picks have been submitted
    */
-  private async checkAllPicksSubmitted(draftWindowId: string): Promise<boolean> {
+  async checkAllPicksSubmitted(draftWindowId: string): Promise<boolean> {
     const window = await this.prisma.draftWindow.findUnique({
       where: { id: draftWindowId },
       include: {
@@ -889,6 +892,121 @@ export class DraftsService {
     // This would be implemented when we store draft order in the database
     // For now, the order is based on join order or randomization at draft window creation
     console.log(`[DraftsService] Draft order rotation for league ${leagueId}`);
+  }
+
+  /**
+   * Get user's auto-draft preferences
+   */
+  async getAutoDraftPreferences(userId: string): Promise<AutoDraftPreferencesOutput> {
+    const preferences = await this.prisma.autoDraftPreference.findMany({
+      where: { userId },
+      orderBy: { rank: 'asc' },
+    });
+
+    // Get driver details for each preference
+    const driverIds = preferences.map(p => p.driverId);
+    const drivers = await this.prisma.driver.findMany({
+      where: { id: { in: driverIds } },
+    });
+    const driverMap = new Map(drivers.map(d => [d.id, d]));
+
+    return {
+      preferences: preferences.map(p => {
+        const driver = driverMap.get(p.driverId);
+        return {
+          id: p.id,
+          userId: p.userId,
+          driverId: p.driverId,
+          driverCode: driver?.code || '',
+          driverName: driver ? `${driver.givenName} ${driver.familyName}` : '',
+          rank: p.rank,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+        };
+      }),
+    };
+  }
+
+  /**
+   * Set user's auto-draft preferences
+   * Replaces all existing preferences with new ones
+   */
+  async setAutoDraftPreferences(userId: string, input: SetAutoDraftPreferencesInput): Promise<AutoDraftPreferencesOutput> {
+    // Validate that all drivers exist
+    const driverIds = input.preferences.map(p => p.driverId);
+    const drivers = await this.prisma.driver.findMany({
+      where: { id: { in: driverIds } },
+    });
+
+    if (drivers.length !== driverIds.length) {
+      const foundIds = new Set(drivers.map(d => d.id));
+      const missingIds = driverIds.filter(id => !foundIds.has(id));
+      throw new Error(`Drivers not found: ${missingIds.join(', ')}`);
+    }
+
+    // Validate ranks are unique and positive
+    const ranks = input.preferences.map(p => p.rank);
+    const uniqueRanks = new Set(ranks);
+    if (uniqueRanks.size !== ranks.length) {
+      throw new Error('Duplicate ranks are not allowed');
+    }
+    if (ranks.some(r => r < 1)) {
+      throw new Error('Ranks must be positive integers');
+    }
+
+    // Delete existing preferences and create new ones in a transaction
+    await this.prisma.$transaction(async (tx) => {
+      // Delete all existing preferences for this user
+      await tx.autoDraftPreference.deleteMany({
+        where: { userId },
+      });
+
+      // Create new preferences
+      for (const pref of input.preferences) {
+        await tx.autoDraftPreference.create({
+          data: {
+            userId,
+            driverId: pref.driverId,
+            rank: pref.rank,
+          },
+        });
+      }
+    });
+
+    // Return the new preferences
+    return this.getAutoDraftPreferences(userId);
+  }
+
+  /**
+   * Get the next preferred driver for auto-draft
+   * Returns the highest-ranked available driver
+   */
+  async getNextAutoDraftDriver(userId: string, draftWindowId: string): Promise<string | null> {
+    // Get user's preferences
+    const preferences = await this.prisma.autoDraftPreference.findMany({
+      where: { userId },
+      orderBy: { rank: 'asc' },
+    });
+
+    if (preferences.length === 0) {
+      return null;
+    }
+
+    // Get already picked drivers
+    const picks = await this.prisma.draftPick.findMany({
+      where: { draftWindowId },
+      select: { driverId: true },
+    });
+    const pickedDriverIds = new Set(picks.map(p => p.driverId));
+
+    // Find first available driver from preferences
+    for (const pref of preferences) {
+      if (!pickedDriverIds.has(pref.driverId)) {
+        return pref.driverId;
+      }
+    }
+
+    return null; // All preferred drivers are taken
   }
 }
 

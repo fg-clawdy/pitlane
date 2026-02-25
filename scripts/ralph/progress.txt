@@ -1,5 +1,8 @@
 ## Codebase Patterns
 - Use Fastify 5.x as the web framework (not Express)
+- BullMQ for background job queues with Redis 7
+- Shared service instances via getPrisma(), getF1DataService(), getScoringService()
+- Job queues: jolpica, draft, scoring, notifications
 - LeagueStandingsView interface consolidates standings, draft status, and league info
 - MemberRaceHistory provides race-by-race detail with driver picks and scores
 - CurrentWeekDraftStatus shows who has picked and timer remaining
@@ -21,15 +24,19 @@
 - Auth token stored in sessionStorage, checked client-side in page components
 - Use @/* path alias for imports (e.g., @/lib/utils, @/components/ui/button)
 - api() function from lib/api.ts takes generic type, options with method, body, token
+- Rate limiting via @fastify/rate-limit with configurable max/timeWindow per endpoint
+- Prisma schema changes require: npx prisma generate --schema=apps/api/prisma/schema.prisma
+- CommissionerFlag model uses 'issue' and 'notes' fields (not 'reason' and 'description')
+- LeagueMember has round1PickOrder and round2PickOrder fields for draft ordering
 
 Ralph Loop Progress - PitLane MVP
 =====================================
 Started: 2026-02-23T00:00:00Z
 
-Stories Completed: 21 / 49 (43%)
+Stories Completed: 29 / 49 (59%)
 
 Progress:
-[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░] 43%
+[▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░] 59%
 
 Completed Stories:
 - US-001: User Registration with Email Verification ✓
@@ -53,8 +60,17 @@ Completed Stories:
 - US-033: Create League Screen ✓
 - US-034: League Home & Standings ✓
 - US-035: Live Draft Board Screen ✓
+- US-039: API Auth Endpoints ✓
+- US-040: API User Endpoints ✓
+- US-041: API F1 Data Endpoints ✓
+- US-042: API League Endpoints ✓
+- US-043: API Draft Endpoints ✓
+- US-044: API Scoring & Standings Endpoints ✓
+- US-047: Background Jobs - Jolpica Sync ✓
+- US-048: Background Jobs - Draft System ✓
 
 Pending Stories (by priority):
+- US-049: Background Jobs - Scoring & Notifications (Priority 1)
 - US-003: User Profile Management (Priority 2, depends on US-001, US-002)
 - US-004: Email Change with Hold Period (Priority 2, depends on US-003)
 - US-007: Admin Data Override (Priority 2, depends on US-005, US-006)
@@ -73,19 +89,253 @@ Pending Stories (by priority):
 - US-036: League Settings & Member Management (Priority 2)
 - US-037: User Profile & Notifications (Priority 2)
 - US-038: Admin Panel Screens (Priority 2)
-- US-039: API Auth Endpoints (Priority 1)
-- US-040: API User Endpoints (Priority 1)
-- US-041: API F1 Data Endpoints (Priority 1)
-- US-042: API League Endpoints (Priority 1)
-- US-043: API Draft Endpoints (Priority 1)
-- US-044: API Scoring & Standings Endpoints (Priority 1)
 - US-045: API Notifications Endpoints (Priority 2)
 - US-046: API Admin Endpoints (Priority 2)
-- US-047: Background Jobs - Jolpica Sync (Priority 1)
-- US-048: Background Jobs - Draft System (Priority 1)
-- US-049: Background Jobs - Scoring & Notifications (Priority 1)
 
-Next Story: US-039 (API Auth Endpoints) - Priority 1
+Next Story: US-049 (Background Jobs - Scoring & Notifications) - Priority 1
+
+---
+
+## 2026-02-25T11:55:00Z - US-048 - Background Jobs - Draft System
+
+**What was implemented:**
+- Created draft.worker.ts with BullMQ worker for draft queue
+- Job handlers for all four draft job types:
+  - draft.window.open: Opens draft windows Monday 00:00 UTC of race week
+  - draft.window.close: Closes at qualifying start OR when all picks submitted
+  - draft.pick.timeout: Resolves missed picks after 24h timer expires
+  - draft.auto_pick: Auto-picks based on user preferences when turn starts
+- Added getDraftsService() to instances.ts for shared DraftsService
+- Updated scheduler.ts to schedule draft.window.open jobs for upcoming races
+- Made checkAllPicksSubmitted() public in DraftsService for worker access
+- Worker schedules follow-on jobs (close, auto-pick for next member) automatically
+
+**Files changed:**
+- apps/api/src/jobs/instances.ts - Added getDraftsService()
+- apps/api/src/jobs/draft.worker.ts - New draft system worker
+- apps/api/src/jobs/scheduler.ts - Enhanced scheduleDraftWindows() with race queries
+- apps/api/src/jobs/index.ts - Exported draftWorker, closeDraftWorker, getDraftsService
+- apps/api/src/modules/drafts/drafts.service.ts - Made checkAllPicksSubmitted() public
+
+**Acceptance Criteria Met:**
+- draft.window.open: Monday 00:00 UTC of race week ✓
+- draft.window.close: at qualifying start OR all-picked ✓
+- draft.pick.timeout: 24h after pick-turn-start ✓
+- draft.auto_pick: on player turn start if auto-draft set ✓
+
+**Learnings for future iterations:**
+- Draft worker uses DraftsService methods: createDraftWindowsForRace, openScheduledDraftWindows, resolveMissedPick, getNextAutoDraftDriver
+- Auto-pick checks preferences and submits immediately if available driver found
+- Window close resolves any remaining missed picks before closing
+- Worker schedules subsequent auto-pick checks for next member in turn order
+
+**Gotchas encountered:**
+- checkAllPicksSubmitted was private, had to make public for worker access
+- TypeScript compiles with: npx tsc --project apps/api/tsconfig.json --noEmit
+
+**Useful context:**
+- Draft worker concurrency: 3, rate limit: 10 jobs/second
+- Auto-pick job ID format: autopick-{draftWindowId}-{memberId}-r{round}
+- Window close job ID format: close-{draftWindowId}
+- TypeScript compiles successfully
+
+---
+
+## 2026-02-25T11:31:00Z - US-043 - API Draft Endpoints
+
+**What was implemented:**
+- Enhanced existing drafts module with auto-draft preference endpoints
+- Added types: AutoDraftPreferenceEntry, AutoDraftPreferencesOutput, SetAutoDraftPreferencesInput
+- Added service methods: getAutoDraftPreferences, setAutoDraftPreferences, getNextAutoDraftDriver
+- Added controller handlers: getAutoDraftPreferences, setAutoDraftPreferences
+- Added rate limiting to all existing draft endpoints:
+  - GET /api/v1/leagues/:id/drafts (60/min)
+  - GET /api/v1/leagues/:id/drafts/current (60/min)
+  - GET /api/v1/drafts/:draftId (60/min)
+  - GET /api/v1/drafts/:draftId/state (60/min)
+  - POST /api/v1/drafts/:draftId/picks (30/min)
+- New endpoints:
+  - GET /api/v1/users/me/auto-draft-preferences (30/min)
+  - PUT /api/v1/users/me/auto-draft-preferences (10/min)
+- Auto-draft preferences are stored per user, with ranked driver IDs
+- setAutoDraftPreferences replaces all existing preferences atomically
+
+**Files changed:**
+- apps/api/src/modules/drafts/types.ts - Added auto-draft preference types
+- apps/api/src/modules/drafts/drafts.service.ts - Added auto-draft preference methods
+- apps/api/src/modules/drafts/drafts.controller.ts - Added handlers for auto-draft endpoints
+- apps/api/src/modules/drafts/drafts.routes.ts - Added routes with rate limiting
+
+**Acceptance Criteria Met:**
+- GET /api/v1/leagues/:id/drafts ✓
+- GET /api/v1/leagues/:id/drafts/current ✓
+- POST /api/v1/drafts/:draftId/picks ✓
+- GET /api/v1/users/me/auto-draft-preferences ✓
+- PUT /api/v1/users/me/auto-draft-preferences ✓
+
+**Learnings for future iterations:**
+- AutoDraftPreference model uses userId + driverId as unique constraint
+- Preferences are replaced atomically in a transaction
+- getNextAutoDraftDriver utility method available for background jobs
+- AutoDraftPreference does not have a driver relation - must query Driver separately
+
+**Gotchas encountered:**
+- Prisma AutoDraftPreference doesn't include driver relation by default - fetch drivers separately
+
+**Useful context:**
+- Auto-draft preferences are global per user (not per league)
+- Rank must be positive integer, no duplicates allowed
+- TypeScript compiles successfully
+
+---
+
+## 2026-02-25T05:57:00Z - US-040 - API User Endpoints
+
+**What was implemented:**
+- Enhanced existing users module with full API endpoints
+- Added email change functionality with hold period support:
+  - POST /api/v1/users/me/email-change (3/day) - request email change
+  - GET /api/v1/users/me/email-change - get pending request status
+  - POST /api/v1/users/me/email-change/cancel (5/hr) - cancel pending request
+  - POST /api/v1/users/me/email-change/waive-hold (5/hr) - waive 24h hold
+  - GET /api/v1/users/me/email-change/verify - verify with token
+- Added push subscription endpoints:
+  - POST /api/v1/users/me/push-subscription (10/min)
+  - DELETE /api/v1/users/me/push-subscription (10/min)
+- Enhanced existing profile endpoints with rate limiting:
+  - GET /api/v1/users/me - get current user profile
+  - PATCH /api/v1/users/me (20/min) - update profile
+  - POST /api/v1/users/me/password (5/15min) - change password
+- Email change hold period configurable via system settings (default 24h)
+- Email change expires after 72 hours if not completed
+- All refresh tokens invalidated on email change completion
+
+**Files changed:**
+- apps/api/src/modules/users/types.ts - Added EmailChangeRequestDto, EmailChangeResponse, EmailChangeStatus
+- apps/api/src/modules/users/users.service.ts - Added email change functions (request, cancel, waive, verify)
+- apps/api/src/modules/users/users.controller.ts - Added handlers for email change endpoints
+- apps/api/src/modules/users/users.routes.ts - Added routes with rate limiting
+
+**Acceptance Criteria Met:**
+- GET /api/v1/users/me ✓
+- PATCH /api/v1/users/me (20/min) ✓
+- POST /api/v1/users/me/email-change (3/day) ✓
+- POST /api/v1/users/me/email-change/cancel (5/hr) ✓
+- POST /api/v1/users/me/email-change/waive-hold (5/hr) ✓
+- POST /api/v1/users/me/push-subscription (10/min) ✓
+- DELETE /api/v1/users/me/push-subscription (10/min) ✓
+
+**Learnings for future iterations:**
+- Email change uses separate EmailChangeRequest model with token for verification
+- Hold period read from SystemSetting table (email_change_hold_seconds)
+- Multiple pending requests auto-cancelled before creating new one
+- Rate limiting uses user.id when authenticated, falls back to IP
+
+**Gotchas encountered:**
+- None - straightforward implementation following existing patterns
+
+**Useful context:**
+- Email change requires password confirmation for security
+- Hold period can be waived by user for immediate change
+- TypeScript compiles successfully
+
+---
+
+## 2026-02-25T00:05:00Z - US-047 - Background Jobs - Jolpica Sync
+
+**What was implemented:**
+- Installed BullMQ and ioredis packages for job queue support
+- Created jobs module with queue configuration (queues.ts)
+  - Four queues: jolpica, draft, scoring, notifications
+  - Job names for all job types
+- Created shared service instances (instances.ts)
+  - initializeServices(), getPrisma(), getF1DataService(), getScoringService()
+- Created Jolpica sync worker (jolpica.worker.ts)
+  - Handles jolpica.sync.results with 2h retry delay
+  - Handles jolpica.sync.season for full season sync
+  - Triggers scoring calculation after successful result sync
+- Created job scheduler (scheduler.ts)
+  - Weekly season sync scheduled Monday 02:00 UTC
+  - initializeSchedulers() for app startup
+
+**Files changed:**
+- apps/api/package.json - Added bullmq and ioredis dependencies
+- apps/api/src/jobs/queues.ts - Queue configuration and exports
+- apps/api/src/jobs/instances.ts - Shared service instances
+- apps/api/src/jobs/jolpica.worker.ts - Jolpica sync worker
+- apps/api/src/jobs/scheduler.ts - Job scheduler
+- apps/api/src/jobs/index.ts - Module entry point
+
+**Acceptance Criteria Met:**
+- jolpica.sync.results: poll for race results, retry with 2h backoff ✓
+- jolpica.sync.season: sync season schedule weekly (Monday 02:00 UTC) ✓
+
+**Learnings for future iterations:**
+- BullMQ Worker uses IORedis connection with maxRetriesPerRequest: null
+- Job data types must be exported with `export interface`
+- Use jolpicaQueue.add() to schedule new jobs from within worker (not job.queue.add())
+- Shared service instances prevent redundant PrismaClient connections
+
+**Gotchas encountered:**
+- BullMQ Job.queue property is protected - use imported queue instead
+- Worker rate limiting via limiter option in Worker constructor
+
+**Useful context:**
+- Jobs module at apps/api/src/jobs/
+- All queues use same Redis connection
+- TypeScript compiles successfully
+
+---
+
+## 2026-02-24T23:05:00Z - US-039 - API Auth Endpoints
+
+**What was implemented:**
+- Added @fastify/rate-limit package for rate limiting support
+- Implemented all auth endpoints with rate limiting:
+  - POST /api/v1/auth/register (5/min/IP)
+  - POST /api/v1/auth/login (10/min/IP)
+  - POST /api/v1/auth/refresh
+  - POST /api/v1/auth/logout
+  - GET /api/v1/auth/verify-email (10/hr/token)
+  - POST /api/v1/auth/forgot-password (3/hr/email)
+  - POST /api/v1/auth/reset-password (5/hr/IP)
+  - POST /api/v1/auth/resend-verification (3/hr/email)
+- New service functions: register, verifyEmail, forgotPassword, resetPassword, resendVerification
+- Password validation regex for complexity requirements
+- Username auto-generation from email prefix
+- Verification tokens with 24h expiry
+- Password reset tokens with 1h expiry
+
+**Files changed:**
+- apps/api/package.json - Added @fastify/rate-limit dependency
+- apps/api/src/index.ts - Registered rate limiting globally
+- apps/api/src/modules/auth/auth.service.ts - Added register, verify, forgot/reset password services
+- apps/api/src/modules/auth/auth.controller.ts - Added handlers for all new endpoints
+- apps/api/src/modules/auth/auth.routes.ts - Added routes with per-endpoint rate limiting
+
+**Acceptance Criteria Met:**
+- POST /api/v1/auth/register (rate limit: 5/min/IP) ✓
+- POST /api/v1/auth/login (rate limit: 10/min/IP) ✓
+- POST /api/v1/auth/refresh ✓
+- POST /api/v1/auth/logout ✓
+- POST /api/v1/auth/forgot-password (3/hr/email) ✓
+- POST /api/v1/auth/reset-password (5/hr/IP) ✓
+- GET /api/v1/auth/verify-email (10/hr/token) ✓
+
+**Learnings for future iterations:**
+- @fastify/rate-limit registered globally with defaults, overridden per-route via config.rateLimit
+- keyGenerator function customizes rate limit key (IP, email, token, etc.)
+- Rate limit timeWindow accepts human-readable strings like '1 minute', '1 hour'
+- Development mode returns verification/reset tokens in response for testing
+
+**Gotchas encountered:**
+- TypeScript needed explicit FastifyRequest type in keyGenerator arrow functions
+- rate-limit package must be registered before routes that use it
+
+**Useful context:**
+- VerificationToken model used for both email verification and password reset
+- Tokens are crypto.randomBytes(32).toString('hex')
+- TypeScript compiles successfully
 
 ---
 
@@ -168,6 +418,8 @@ Next Story: US-039 (API Auth Endpoints) - Priority 1
 - TypeScript compiles successfully with npx tsc --project apps/web/tsconfig.json --noEmit
 - League page links to /leagues/[id]/draft for draft board (US-035)
 - Rank badges use Tailwind colors: yellow-100 for 1st, gray-100 for 2nd, orange-100 for 3rd
+
+---
 
 ## 2026-02-24T22:10:00Z - US-033 - Create League Screen
 
@@ -434,5 +686,71 @@ Next Story: US-039 (API Auth Endpoints) - Priority 1
   - GET /api/v1/leagues/:id/standings-view - Full view with draft status
   - GET /api/v1/leagues/:id/members/:memberId/history - Race history with driver details
 - TypeScript compiles successfully with all changes
+
+---
+
+## 2026-02-25T06:17:00Z - US-042 - API League Endpoints
+
+**What was implemented:**
+- Enhanced existing leagues module with full API endpoints
+- Added new service methods: updateLeague, deleteLeague, updateDraftOrder, flagIssue
+- Added round1PickOrder and round2PickOrder fields to LeagueMember schema for draft ordering
+- Added types: UpdateLeagueInput, UpdateDraftOrderInput, FlagIssueInput, CommissionerFlagResponse
+- Implemented all league endpoints with rate limiting:
+  - POST /api/v1/leagues (10/day/user)
+  - GET /api/v1/leagues (public leagues)
+  - GET /api/v1/users/me/leagues
+  - GET /api/v1/leagues/:id
+  - PATCH /api/v1/leagues/:id (commissioner only, 20/min)
+  - DELETE /api/v1/leagues/:id (commissioner, 1/day)
+  - POST /api/v1/leagues/:id/join
+  - POST /api/v1/leagues/:id/leave
+  - GET /api/v1/leagues/:id/members
+  - DELETE /api/v1/leagues/:id/members/:memberId
+  - POST /api/v1/leagues/:id/invite-links
+  - GET /api/v1/join/:token
+  - GET /api/v1/leagues/:id/join-requests
+  - PATCH /api/v1/leagues/:id/join-requests/:requestId
+  - PATCH /api/v1/leagues/:id/draft-order
+  - POST /api/v1/leagues/:id/flag
+
+**Files changed:**
+- apps/api/prisma/schema.prisma - Added round1PickOrder, round2PickOrder to LeagueMember
+- apps/api/src/modules/leagues/types.ts - Added UpdateLeagueInput, UpdateDraftOrderInput, FlagIssueInput, CommissionerFlagResponse
+- apps/api/src/modules/leagues/leagues.service.ts - Added updateLeague, deleteLeague, updateDraftOrder, flagIssue methods
+- apps/api/src/modules/leagues/leagues.controller.ts - Added handlers for new endpoints
+- apps/api/src/modules/leagues/leagues.routes.ts - Added routes with rate limiting
+
+**Acceptance Criteria Met:**
+- POST /api/v1/leagues (10/day/user) ✓
+- GET /api/v1/leagues (public leagues) ✓
+- GET /api/v1/users/me/leagues ✓
+- GET /api/v1/leagues/:id ✓
+- PATCH /api/v1/leagues/:id (commissioner only) ✓
+- DELETE /api/v1/leagues/:id (commissioner, 1/day) ✓
+- POST /api/v1/leagues/:id/join ✓
+- POST /api/v1/leagues/:id/leave ✓
+- GET /api/v1/leagues/:id/members ✓
+- DELETE /api/v1/leagues/:id/members/:memberId ✓
+- POST /api/v1/leagues/:id/invite-links ✓
+- GET /api/v1/join/:token ✓
+- GET /api/v1/leagues/:id/join-requests ✓
+- PATCH /api/v1/leagues/:id/join-requests/:requestId ✓
+- PATCH /api/v1/leagues/:id/draft-order ✓
+- POST /api/v1/leagues/:id/flag ✓
+
+**Learnings for future iterations:**
+- CommissionerFlag model uses 'issue' and 'notes' fields (not 'reason' and 'description')
+- LeagueMember.round1PickOrder and round2PickOrder store draft position
+- Draft order update uses transaction to update all members atomically
+- Prisma generate must be run with --schema flag: npx prisma generate --schema=apps/api/prisma/schema.prisma
+
+**Gotchas encountered:**
+- Initial CommissionerFlag.create used wrong field names - mapped to correct schema fields
+
+**Useful context:**
+- League settings locked after first draft (scoringType, draftType cannot change)
+- Commissioner is always the first member (joinedAt order)
+- TypeScript compiles successfully
 
 ---

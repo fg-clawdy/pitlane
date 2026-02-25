@@ -184,6 +184,53 @@ export class DraftsController {
       return reply.code(500).send({ error: 'Failed to resolve missed pick' });
     }
   };
+
+  /**
+   * Get user's auto-draft preferences
+   * GET /api/v1/users/me/auto-draft-preferences
+   */
+  getAutoDraftPreferences = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const userId = (request as any).user?.userId;
+      
+      if (!userId) {
+        return reply.code(401).send({ error: 'Not authenticated' });
+      }
+
+      const preferences = await this.draftsService.getAutoDraftPreferences(userId);
+      return reply.send(preferences);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({ error: 'Failed to get auto-draft preferences' });
+    }
+  };
+
+  /**
+   * Set user's auto-draft preferences
+   * PUT /api/v1/users/me/auto-draft-preferences
+   */
+  setAutoDraftPreferences = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const userId = (request as any).user?.userId;
+      
+      if (!userId) {
+        return reply.code(401).send({ error: 'Not authenticated' });
+      }
+
+      const { preferences } = request.body as { preferences: Array<{ driverId: string; rank: number }> };
+
+      if (!preferences || !Array.isArray(preferences)) {
+        return reply.code(400).send({ error: 'Preferences array is required' });
+      }
+
+      const result = await this.draftsService.setAutoDraftPreferences(userId, { preferences });
+      return reply.send(result);
+    } catch (error) {
+      request.log.error(error);
+      const message = error instanceof Error ? error.message : 'Failed to set auto-draft preferences';
+      return reply.code(400).send({ error: message });
+    }
+  };
 }
 
 export default DraftsController;

@@ -133,6 +133,29 @@ export interface PickSubmittedPayload {
   draftCompleted: boolean;
 }
 
+// Auto-draft preference types
+export interface AutoDraftPreferenceEntry {
+  id: string;
+  userId: string;
+  driverId: string;
+  driverCode: string;
+  driverName: string;
+  rank: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface AutoDraftPreferencesOutput {
+  preferences: AutoDraftPreferenceEntry[];
+}
+
+export interface SetAutoDraftPreferencesInput {
+  preferences: Array<{
+    driverId: string;
+    rank: number;
+  }>;
+}
+
 // System settings defaults
 export const DEFAULT_DRAFT_PICK_TIMEOUT_HOURS = 24;
 

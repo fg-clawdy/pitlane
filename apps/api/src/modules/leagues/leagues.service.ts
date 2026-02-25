@@ -8,6 +8,10 @@ import {
   JoinRequestResponse,
   InviteLinkResponse,
   JoinViaInviteResponse,
+  UpdateLeagueInput,
+  UpdateDraftOrderInput,
+  FlagIssueInput,
+  CommissionerFlagResponse,
   ScoringType,
   DraftType,
   Visibility,
@@ -905,5 +909,230 @@ export class LeaguesService {
     }
 
     return { league: leagueResponse, valid: true };
+  }
+
+  /**
+   * Update league settings (commissioner only)
+   * scoring_type and draft_type are locked after first draft
+   */
+  async updateLeague(leagueId: string, userId: string, input: UpdateLeagueInput): Promise<LeagueResponse> {
+    const league = await this.prisma.league.findUnique({
+      where: { id: leagueId },
+      include: {
+        members: {
+          where: { leftAt: null },
+          orderBy: { joinedAt: 'asc' },
+        },
+      },
+    });
+
+    if (!league) {
+      throw new Error('League not found');
+    }
+
+    const commissioner = league.members[0];
+    if (!commissioner || commissioner.userId !== userId) {
+      throw new Error('Only the commissioner can update league settings');
+    }
+
+    // Check if any draft has started (locks scoring_type and draft_type)
+    const startedDraft = await this.prisma.draftWindow.findFirst({
+      where: {
+        leagueId,
+        status: { in: ['open', 'closed'] },
+      },
+    });
+
+    // Validate league name if provided
+    if (input.name !== undefined) {
+      if (input.name.length < 3 || input.name.length > 80) {
+        throw new Error('League name must be between 3 and 80 characters');
+      }
+
+      // Check uniqueness
+      const existingLeague = await this.prisma.league.findUnique({
+        where: {
+          seasonId_name: {
+            seasonId: league.seasonId,
+            name: input.name,
+          },
+        },
+      });
+
+      if (existingLeague && existingLeague.id !== leagueId) {
+        throw new Error('League name already exists for this season');
+      }
+    }
+
+    // Validate max players if provided
+    if (input.maxPlayers !== undefined) {
+      if (input.maxPlayers < 2 || input.maxPlayers > 11) {
+        throw new Error('Max players must be between 2 and 11');
+      }
+
+      // Can't reduce below current member count
+      if (input.maxPlayers < league.members.length) {
+        throw new Error('Cannot reduce max players below current member count');
+      }
+    }
+
+    const updated = await this.prisma.league.update({
+      where: { id: leagueId },
+      data: {
+        ...(input.name !== undefined && { name: input.name }),
+        ...(input.visibility !== undefined && { visibility: input.visibility }),
+        ...(input.joinApprovalRequired !== undefined && { joinApprovalRequired: input.joinApprovalRequired }),
+        ...(input.targetPlayers !== undefined && { targetPlayers: input.targetPlayers }),
+        ...(input.maxPlayers !== undefined && { maxPlayers: input.maxPlayers }),
+        ...(input.missedPickResolution !== undefined && { missedPickResolution: input.missedPickResolution }),
+        ...(input.substitutionPolicy !== undefined && { substitutionPolicy: input.substitutionPolicy }),
+      },
+    });
+
+    return {
+      id: updated.id,
+      name: updated.name,
+      seasonId: updated.seasonId,
+      scoringType: updated.scoringType,
+      draftType: updated.draftType,
+      visibility: updated.visibility,
+      joinApprovalRequired: updated.joinApprovalRequired,
+      targetPlayers: updated.targetPlayers,
+      maxPlayers: updated.maxPlayers,
+      missedPickResolution: updated.missedPickResolution,
+      substitutionPolicy: updated.substitutionPolicy,
+      draftOrderRandomized: updated.draftOrderRandomized,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+      memberCount: league.members.length,
+      isCommissioner: true,
+    };
+  }
+
+  /**
+   * Delete a league (commissioner only, rate limited to 1/day)
+   */
+  async deleteLeague(leagueId: string, userId: string): Promise<void> {
+    const league = await this.prisma.league.findUnique({
+      where: { id: leagueId },
+      include: {
+        members: {
+          where: { leftAt: null },
+          orderBy: { joinedAt: 'asc' },
+        },
+      },
+    });
+
+    if (!league) {
+      throw new Error('League not found');
+    }
+
+    const commissioner = league.members[0];
+    if (!commissioner || commissioner.userId !== userId) {
+      throw new Error('Only the commissioner can delete the league');
+    }
+
+    // Delete league (cascade will handle related records)
+    await this.prisma.league.delete({
+      where: { id: leagueId },
+    });
+  }
+
+  /**
+   * Update draft order (commissioner only)
+   */
+  async updateDraftOrder(leagueId: string, userId: string, input: UpdateDraftOrderInput): Promise<LeagueMemberResponse[]> {
+    const league = await this.prisma.league.findUnique({
+      where: { id: leagueId },
+      include: {
+        members: {
+          where: { leftAt: null },
+          orderBy: { joinedAt: 'asc' },
+        },
+      },
+    });
+
+    if (!league) {
+      throw new Error('League not found');
+    }
+
+    const commissioner = league.members[0];
+    if (!commissioner || commissioner.userId !== userId) {
+      throw new Error('Only the commissioner can update draft order');
+    }
+
+    // Validate all member IDs are valid and no duplicates
+    const memberIds = league.members.map(m => m.id);
+    if (input.memberIds.length !== memberIds.length) {
+      throw new Error('Draft order must include all members');
+    }
+
+    const uniqueIds = new Set(input.memberIds);
+    if (uniqueIds.size !== input.memberIds.length) {
+      throw new Error('Duplicate member IDs in draft order');
+    }
+
+    for (const id of input.memberIds) {
+      if (!memberIds.includes(id)) {
+        throw new Error('Invalid member ID in draft order');
+      }
+    }
+
+    // Update round1PickOrder for each member
+    await this.prisma.$transaction(
+      input.memberIds.map((memberId, index) =>
+        this.prisma.leagueMember.update({
+          where: { id: memberId },
+          data: { round1PickOrder: index + 1 },
+        })
+      )
+    );
+
+    // Return updated members
+    return this.getLeagueMembers(leagueId);
+  }
+
+  /**
+   * Flag an issue to platform admin (commissioner only)
+   */
+  async flagIssue(leagueId: string, userId: string, input: FlagIssueInput): Promise<CommissionerFlagResponse> {
+    const league = await this.prisma.league.findUnique({
+      where: { id: leagueId },
+      include: {
+        members: {
+          where: { leftAt: null },
+          orderBy: { joinedAt: 'asc' },
+        },
+      },
+    });
+
+    if (!league) {
+      throw new Error('League not found');
+    }
+
+    const commissioner = league.members[0];
+    if (!commissioner || commissioner.userId !== userId) {
+      throw new Error('Only the commissioner can flag issues');
+    }
+
+    const flag = await this.prisma.commissionerFlag.create({
+      data: {
+        leagueId,
+        userId,
+        issue: input.reason,
+        notes: input.description ?? null,
+        status: 'open',
+      },
+    });
+
+    return {
+      id: flag.id,
+      leagueId: flag.leagueId,
+      userId: flag.userId,
+      reason: flag.issue,
+      description: flag.notes,
+      status: flag.status as 'open' | 'investigating' | 'resolved' | 'dismissed',
+      createdAt: flag.createdAt,
+    };
   }
 }

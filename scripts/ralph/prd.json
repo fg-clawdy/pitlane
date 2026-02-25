@@ -1058,9 +1058,9 @@
       ],
       "dependencies": ["US-001", "US-002"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "API IDs: API-001 through API-007",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-24. All auth endpoints with rate limiting implemented. Added @fastify/rate-limit package.",
       "testGates": ["TypeScript compiles", "Integration tests pass"]
     },
     {
@@ -1079,9 +1079,9 @@
       ],
       "dependencies": ["US-003", "US-004"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "API IDs: API-010 through API-016",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-25. All endpoints implemented with rate limiting. Email change includes hold period support.",
       "testGates": ["TypeScript compiles", "Integration tests pass"]
     },
     {
@@ -1097,9 +1097,9 @@
       ],
       "dependencies": ["US-005"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "API IDs: API-020 through API-023",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-25. All endpoints already implemented in f1data module. Routes registered without /api/v1 prefix in f1dataRoutes, so endpoints are /api/v1/seasons, etc.",
       "testGates": ["TypeScript compiles", "Integration tests pass"]
     },
     {
@@ -1127,9 +1127,9 @@
       ],
       "dependencies": ["US-008", "US-009", "US-010"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "API IDs: API-030 through API-045",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-25. All endpoints implemented with rate limiting. Added round1PickOrder/round2PickOrder fields to LeagueMember schema for draft ordering.",
       "testGates": ["TypeScript compiles", "Integration tests pass"]
     },
     {
@@ -1162,9 +1162,9 @@
       ],
       "dependencies": ["US-020", "US-021"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "API IDs: API-060, API-061",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-25. Endpoints already implemented in scoring module. Also includes standings-view, podium, weekly-winners, member history endpoints.",
       "testGates": ["TypeScript compiles", "Integration tests pass"]
     },
     {
@@ -1217,9 +1217,9 @@
       ],
       "dependencies": ["US-005", "US-006"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Queue: jolpica",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-25. BullMQ + ioredis for job queues. JolpicaWorker handles sync.results with 2h retry delay, sync.season scheduled weekly Monday 02:00 UTC.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -1235,9 +1235,9 @@
       ],
       "dependencies": ["US-011", "US-013", "US-015"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Queue: draft",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-25. Draft worker handles all four job types: window.open, window.close, pick.timeout, auto_pick. Scheduler schedules window.open jobs for upcoming races on Monday 00:00 UTC of race week.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {

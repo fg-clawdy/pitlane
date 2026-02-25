@@ -1,9 +1,14 @@
 import { PrismaClient } from '@prisma/client';
 import { verifyPassword, hashPassword } from '../../lib/password';
-import { UserProfile, UpdateProfileDto, ChangePasswordDto, PushSubscriptionDto } from './types';
+import { UserProfile, UpdateProfileDto, ChangePasswordDto, PushSubscriptionDto, EmailChangeRequestDto, EmailChangeResponse, EmailChangeStatus } from './types';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 const USERNAME_REGEX = /^[a-zA-Z0-9._-]+$/;
+
+// Default hold period: 24 hours (can be overridden by system settings)
+const DEFAULT_EMAIL_CHANGE_HOLD_SECONDS = 86400;
+const EMAIL_CHANGE_EXPIRY_HOURS = 72;
 
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -102,4 +107,165 @@ export async function addPushSubscription(userId: string, dto: PushSubscriptionD
 
 export async function removePushSubscription(userId: string, endpoint: string): Promise<void> {
   await prisma.pushSubscription.deleteMany({ where: { userId, endpoint } });
+}
+
+export async function getSystemSetting(key: string, defaultValue: number): Promise<number> {
+  const setting = await prisma.systemSetting.findUnique({ where: { key } });
+  if (!setting || typeof setting.value !== 'number') return defaultValue;
+  return setting.value;
+}
+
+export async function requestEmailChange(userId: string, dto: EmailChangeRequestDto): Promise<EmailChangeResponse> {
+  // Verify password
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new Error('User not found');
+  
+  const isValid = await verifyPassword(dto.password, user.passwordHash);
+  if (!isValid) throw new Error('Password is incorrect');
+
+  // Check if new email is different
+  if (dto.newEmail.toLowerCase() === user.email.toLowerCase()) {
+    throw new Error('New email must be different from current email');
+  }
+
+  // Check if new email is already in use
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      email: { equals: dto.newEmail, mode: 'insensitive' },
+      NOT: { id: userId }
+    }
+  });
+  if (existingUser) throw new Error('Email is already in use');
+
+  // Cancel any existing pending request
+  await prisma.emailChangeRequest.updateMany({
+    where: { userId, cancelledAt: null, completedAt: null },
+    data: { cancelledAt: new Date() }
+  });
+
+  // Get hold period from system settings
+  const holdPeriodSeconds = await getSystemSetting('email_change_hold_seconds', DEFAULT_EMAIL_CHANGE_HOLD_SECONDS);
+
+  // Create new request
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + EMAIL_CHANGE_EXPIRY_HOURS * 60 * 60 * 1000);
+
+  const request = await prisma.emailChangeRequest.create({
+    data: {
+      userId,
+      newEmail: dto.newEmail,
+      token,
+      expiresAt,
+    }
+  });
+
+  return {
+    id: request.id,
+    newEmail: request.newEmail,
+    currentEmail: user.email,
+    expiresAt: request.expiresAt,
+    holdPeriodSeconds,
+    canWaive: true,
+  };
+}
+
+export async function getEmailChangeStatus(userId: string): Promise<EmailChangeStatus> {
+  const request = await prisma.emailChangeRequest.findFirst({
+    where: {
+      userId,
+      cancelledAt: null,
+      completedAt: null,
+      expiresAt: { gt: new Date() }
+    }
+  });
+
+  if (!request) {
+    return { hasPendingRequest: false, request: null };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const holdPeriodSeconds = await getSystemSetting('email_change_hold_seconds', DEFAULT_EMAIL_CHANGE_HOLD_SECONDS);
+
+  return {
+    hasPendingRequest: true,
+    request: {
+      id: request.id,
+      newEmail: request.newEmail,
+      currentEmail: user?.email || '',
+      expiresAt: request.expiresAt,
+      holdPeriodSeconds,
+      canWaive: request.holdWaivedAt === null,
+    }
+  };
+}
+
+export async function cancelEmailChange(userId: string): Promise<void> {
+  const request = await prisma.emailChangeRequest.findFirst({
+    where: {
+      userId,
+      cancelledAt: null,
+      completedAt: null,
+      expiresAt: { gt: new Date() }
+    }
+  });
+
+  if (!request) throw new Error('No pending email change request found');
+
+  await prisma.emailChangeRequest.update({
+    where: { id: request.id },
+    data: { cancelledAt: new Date() }
+  });
+}
+
+export async function waiveHoldEmailChange(userId: string): Promise<void> {
+  const request = await prisma.emailChangeRequest.findFirst({
+    where: {
+      userId,
+      cancelledAt: null,
+      completedAt: null,
+      expiresAt: { gt: new Date() }
+    }
+  });
+
+  if (!request) throw new Error('No pending email change request found');
+  if (request.holdWaivedAt) throw new Error('Hold already waived');
+
+  await prisma.emailChangeRequest.update({
+    where: { id: request.id },
+    data: { holdWaivedAt: new Date() }
+  });
+}
+
+export async function verifyEmailChange(token: string): Promise<void> {
+  const request = await prisma.emailChangeRequest.findUnique({
+    where: { token },
+    include: { user: true }
+  });
+
+  if (!request) throw new Error('Invalid token');
+  if (request.cancelledAt) throw new Error('Request was cancelled');
+  if (request.completedAt) throw new Error('Request already completed');
+  if (request.expiresAt < new Date()) throw new Error('Token has expired');
+
+  // Check if hold period has elapsed or been waived
+  const holdPeriodSeconds = await getSystemSetting('email_change_hold_seconds', DEFAULT_EMAIL_CHANGE_HOLD_SECONDS);
+  const holdElapsed = Date.now() >= request.createdAt.getTime() + holdPeriodSeconds * 1000;
+  
+  if (!request.holdWaivedAt && !holdElapsed) {
+    throw new Error('Hold period has not elapsed yet');
+  }
+
+  // Update user email and mark request as completed
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: request.userId },
+      data: { email: request.newEmail }
+    }),
+    prisma.emailChangeRequest.update({
+      where: { id: request.id },
+      data: { completedAt: new Date() }
+    }),
+    // Invalidate all refresh tokens
+    prisma.refreshToken.deleteMany({ where: { userId: request.userId } })
+  ]);
 }

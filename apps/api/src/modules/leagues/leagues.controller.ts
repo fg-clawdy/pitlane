@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { LeaguesService } from './leagues.service';
-import { CreateLeagueInput, LeagueFilter, JoinLeagueInput } from './types';
+import { CreateLeagueInput, LeagueFilter, JoinLeagueInput, UpdateLeagueInput, UpdateDraftOrderInput, FlagIssueInput } from './types';
 
 export class LeaguesController {
   constructor(private leaguesService: LeaguesService) {}
@@ -393,6 +393,119 @@ export class LeaguesController {
       }
       request.log.error(error);
       return reply.status(500).send({ error: 'Failed to resolve join request' });
+    }
+  }
+
+  /**
+   * PATCH /api/v1/leagues/:id - Update league settings
+   */
+  async updateLeague(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const user = (request as any).user;
+      if (!user) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+
+      const params = request.params as { id: string };
+      const body = request.body as UpdateLeagueInput;
+
+      const league = await this.leaguesService.updateLeague(params.id, user.id, body);
+      return reply.send(league);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('not found') ||
+            error.message.includes('Only the commissioner') ||
+            error.message.includes('League name') ||
+            error.message.includes('Max players') ||
+            error.message.includes('Cannot reduce')) {
+          return reply.status(400).send({ error: error.message });
+        }
+      }
+      request.log.error(error);
+      return reply.status(500).send({ error: 'Failed to update league' });
+    }
+  }
+
+  /**
+   * DELETE /api/v1/leagues/:id - Delete league
+   */
+  async deleteLeague(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const user = (request as any).user;
+      if (!user) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+
+      const params = request.params as { id: string };
+      await this.leaguesService.deleteLeague(params.id, user.id);
+      
+      return reply.status(204).send();
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('not found') ||
+            error.message.includes('Only the commissioner')) {
+          return reply.status(403).send({ error: error.message });
+        }
+      }
+      request.log.error(error);
+      return reply.status(500).send({ error: 'Failed to delete league' });
+    }
+  }
+
+  /**
+   * PATCH /api/v1/leagues/:id/draft-order - Update draft order
+   */
+  async updateDraftOrder(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const user = (request as any).user;
+      if (!user) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+
+      const params = request.params as { id: string };
+      const body = request.body as UpdateDraftOrderInput;
+
+      const members = await this.leaguesService.updateDraftOrder(params.id, user.id, body);
+      return reply.send(members);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('not found') ||
+            error.message.includes('Only the commissioner') ||
+            error.message.includes('Draft order') ||
+            error.message.includes('Invalid member') ||
+            error.message.includes('Duplicate')) {
+          return reply.status(400).send({ error: error.message });
+        }
+      }
+      request.log.error(error);
+      return reply.status(500).send({ error: 'Failed to update draft order' });
+    }
+  }
+
+  /**
+   * POST /api/v1/leagues/:id/flag - Flag issue to admin
+   */
+  async flagIssue(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const user = (request as any).user;
+      if (!user) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+
+      const params = request.params as { id: string };
+      const body = request.body as FlagIssueInput;
+
+      const flag = await this.leaguesService.flagIssue(params.id, user.id, body);
+      return reply.status(201).send(flag);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('not found') ||
+            error.message.includes('Only the commissioner')) {
+          return reply.status(403).send({ error: error.message });
+        }
+      }
+      request.log.error(error);
+      return reply.status(500).send({ error: 'Failed to flag issue' });
     }
   }
 }

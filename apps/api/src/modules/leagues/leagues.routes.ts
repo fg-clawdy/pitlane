@@ -113,7 +113,7 @@ async function getJoinRequestsHandler(request: FastifyRequest, reply: FastifyRep
 }
 
 /**
- * PATCH /api/v1/leagues/:id/join-requests/:requestId
+ * GET /api/v1/leagues/:id/join-requests/:requestId
  * Approve/reject join request (authenticated, commissioner)
  */
 async function resolveJoinRequestHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -121,13 +121,78 @@ async function resolveJoinRequestHandler(request: FastifyRequest, reply: Fastify
 }
 
 /**
+ * PATCH /api/v1/leagues/:id
+ * Update league settings (authenticated, commissioner)
+ */
+async function updateLeagueHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.updateLeague(request, reply);
+}
+
+/**
+ * DELETE /api/v1/leagues/:id
+ * Delete league (authenticated, commissioner)
+ */
+async function deleteLeagueHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.deleteLeague(request, reply);
+}
+
+/**
+ * PATCH /api/v1/leagues/:id/draft-order
+ * Update draft order (authenticated, commissioner)
+ */
+async function updateDraftOrderHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.updateDraftOrder(request, reply);
+}
+
+/**
+ * POST /api/v1/leagues/:id/flag
+ * Flag issue to admin (authenticated, commissioner)
+ */
+async function flagIssueHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await leaguesController.flagIssue(request, reply);
+}
+
+/**
  * Register league routes
  */
 export async function leaguesRoutes(fastify: FastifyInstance): Promise<void> {
   // League CRUD
-  fastify.post('/leagues', { preHandler: authenticate }, createLeagueHandler);
+  fastify.post('/leagues', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 day',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.id || request.ip,
+      },
+    },
+  }, createLeagueHandler);
+  
   fastify.get('/leagues', getPublicLeaguesHandler);
+  
   fastify.get('/leagues/:id', getLeagueHandler);
+  
+  fastify.patch('/leagues/:id', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 20,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.id || request.ip,
+      },
+    },
+  }, updateLeagueHandler);
+  
+  fastify.delete('/leagues/:id', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 1,
+        timeWindow: '1 day',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.id || request.ip,
+      },
+    },
+  }, deleteLeagueHandler);
   
   // User's leagues
   fastify.get('/users/me/leagues', { preHandler: authenticate }, getUserLeaguesHandler);
@@ -151,4 +216,10 @@ export async function leaguesRoutes(fastify: FastifyInstance): Promise<void> {
   // Commissioner: join request management
   fastify.get('/leagues/:id/join-requests', { preHandler: authenticate }, getJoinRequestsHandler);
   fastify.patch('/leagues/:id/join-requests/:requestId', { preHandler: authenticate }, resolveJoinRequestHandler);
+  
+  // Commissioner: draft order
+  fastify.patch('/leagues/:id/draft-order', { preHandler: authenticate }, updateDraftOrderHandler);
+  
+  // Commissioner: flag issue to admin
+  fastify.post('/leagues/:id/flag', { preHandler: authenticate }, flagIssueHandler);
 }
