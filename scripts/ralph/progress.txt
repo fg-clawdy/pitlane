@@ -3,11 +3,11 @@
 
 ## Summary
 - **Total Stories**: 48
-- **Completed**: 37
-- **Pending**: 11
-- **Progress**: 77%
+- **Completed**: 38
+- **Pending**: 10
+- **Progress**: 79%
 
-## Completed User Stories (37)
+## Completed User Stories (38)
 | ID | Title | Epic | Status | Passes |
 |----|-------|------|--------|--------|
 | US-001 | User Registration with Email Verification | EPIC-001 | done | true |
@@ -35,6 +35,9 @@
 | US-023 | HTML5 Web Push Notifications | EPIC-007 | done | true |
 | US-024 | Email Notifications via SMTP | EPIC-007 | done | true |
 | US-025 | In-App Notification Center | EPIC-007 | done | true |
+| US-026 | Draft Event Notifications | EPIC-007 | done | true |
+| US-027 | Admin Dashboard | EPIC-008 | done | true |
+| US-028 | Admin Race Data Entry | EPIC-008 | done | true |
 | US-030 | Landing Page | EPIC-009 | done | true |
 | US-031 | Authentication Screens | EPIC-009 | done | true |
 | US-032 | Dashboard & League List | EPIC-009 | done | true |
@@ -51,8 +54,7 @@
 | US-048 | Background Jobs - Draft System | EPIC-011 | done | true |
 | US-049 | Background Jobs - Scoring & Notifications | EPIC-011 | done | true |
 
-## Pending User Stories (9)
-| US-028 | Admin Race Data Entry | EPIC-008 | pending | 2 |
+## Pending User Stories (6)
 | US-029 | System Configuration (Admin) | EPIC-008 | pending | 3 |
 | US-036 | League Settings & Member Management | EPIC-009 | pending | 2 |
 | US-037 | User Profile & Notifications | EPIC-009 | pending | 2 |
