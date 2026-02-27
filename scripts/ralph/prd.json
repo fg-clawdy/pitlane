@@ -570,9 +570,9 @@
       ],
       "dependencies": ["US-011", "US-012"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Substitution policy commissioner-configurable per league",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-27. Implemented processDriverSubstitution, autoReplaceDriver, markPickAsDNS, createRedraftWindow, getActiveRedraftWindows, submitRedraftPick, notifyPlayerOfSubstitution in DraftsService. SubstitutionPolicy type: auto_replace, redraft, none. Routes: POST /admin/substitutions/:substitutionId/process, GET /users/me/redraft-windows, POST /substitutions/:substitutionId/redraft, GET /drafts/:draftId/substitutions/:substitutionId/impact.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -666,9 +666,9 @@
       ],
       "dependencies": ["US-016", "US-017", "US-018"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "DGE = Double Goose Egg (🥚🥚)",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-27. DGE already implemented in scoring.service.ts: isDGE calculated in calculateRaceScores(), persisted in RaceScore.isDGE and LeagueMemberStat.dgeCount. Displayed in StandingsEntry.dgeCount. recalculateAllLeagueScores() handles admin overrides.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {

@@ -3,11 +3,11 @@
 
 ## Summary
 - **Total Stories**: 48
-- **Completed**: 33
-- **Pending**: 15
-- **Progress**: 69%
+- **Completed**: 35
+- **Pending**: 13
+- **Progress**: 73%
 
-## Completed User Stories (33)
+## Completed User Stories (35)
 | ID | Title | Epic | Status | Passes |
 |----|-------|------|--------|--------|
 | US-001 | User Registration with Email Verification | EPIC-001 | done | true |
@@ -23,10 +23,12 @@
 | US-011 | Draft Window Lifecycle | EPIC-004 | done | true |
 | US-012 | Draft Pick Submission | EPIC-004 | done | true |
 | US-013 | Auto-Draft Preference Queue | EPIC-004 | done | true |
+| US-014 | Driver Substitution After Draft Lock | EPIC-004 | done | true |
 | US-015 | Missed Pick Resolution | EPIC-004 | done | true |
 | US-016 | Scoring Engine - FIA Official | EPIC-005 | done | true |
 | US-017 | Scoring Engine - Linear 20 | EPIC-005 | done | true |
 | US-018 | Scoring Engine - Proprietary | EPIC-005 | done | true |
+| US-019 | Double Goose Egg (DGE) Tracking | EPIC-005 | done | true |
 | US-020 | Weekly Winners & Season Podium | EPIC-005 | done | true |
 | US-021 | League Standings View | EPIC-006 | done | true |
 | US-022 | Live Draft Board (WebSocket) | EPIC-006 | done | true |
@@ -46,11 +48,9 @@
 | US-048 | Background Jobs - Draft System | EPIC-011 | done | true |
 | US-049 | Background Jobs - Scoring & Notifications | EPIC-011 | done | true |
 
-## Pending User Stories (15)
+## Pending User Stories (13)
 | ID | Title | Epic | Status | Priority |
 |----|-------|------|--------|----------|
-| US-014 | Driver Substitution After Draft Lock | EPIC-004 | pending | 2 |
-| US-019 | Double Goose Egg (DGE) Tracking | EPIC-005 | pending | 2 |
 | US-023 | HTML5 Web Push Notifications | EPIC-007 | pending | 2 |
 | US-024 | Email Notifications via SMTP | EPIC-007 | pending | 2 |
 | US-025 | In-App Notification Center | EPIC-007 | pending | 2 |
@@ -103,6 +103,41 @@
   - SCORING_CONFIGS object contains full configuration for each scoring type
 ---
 
+### 2026-02-27: US-019 Double Goose Egg (DGE) Tracking
+- Verified DGE tracking already fully implemented in scoring module
+- isDGE calculated in calculateRaceScores() - both drivers score 0 AND both had actual drivers
+- RaceScore.isDGE persisted in database
+- LeagueMemberStat.dgeCount incremented when DGE occurs
+- StandingsEntry.dgeCount displayed in standings
+- recalculateAllLeagueScores() handles admin override recalculation
+- TypeScript compiles successfully
+- **Learnings for future iterations:**
+  - DGE was implemented together with US-016/US-017/US-018 as part of scoring engine
+  - DGE condition: `driver1Score === 0 && driver2Score === 0 && driver1Id !== null && driver2Id !== null`
+  - LeagueMemberStat tracks cumulative dgeCount across season
+---
+
+### 2026-02-27: US-014 Driver Substitution After Draft Lock
+- Added SubstitutionPolicy type (auto_replace, redraft, none) to drafts/types.ts
+- Implemented processDriverSubstitution in DraftsService
+- Added auto_replace policy: automatically assigns replacement driver to affected picks
+- Added redraft policy: creates 24h window for player to select new driver
+- Added none policy: no action taken, player keeps original driver (scores 0 if DNS)
+- Added getActiveRedraftWindows for players to see their redraft opportunities
+- Added submitRedraftPick for players to select replacement driver
+- Added notifyPlayerOfSubstitution for notifying affected players
+- Added substitution impact endpoint to check how substitution affects a draft
+- Routes added:
+  - POST /admin/substitutions/:substitutionId/process
+  - GET /users/me/redraft-windows
+  - POST /substitutions/:substitutionId/redraft
+  - GET /drafts/:draftId/substitutions/:substitutionId/impact
+- All substitution events logged in driver_substitutions and audit_log tables
+- **Learnings for future iterations:**
+  - Substitution handling requires checking both draft window status (open vs locked) and league policy
+  - Redraft windows stored in audit_log with action='redraft_window_created' for flexibility
+  - League.substitutionPolicy field (string) maps to SubstitutionPolicy type
+---
 ## Notes
 - TypeScript compiles successfully
 - All existing tests should still pass
