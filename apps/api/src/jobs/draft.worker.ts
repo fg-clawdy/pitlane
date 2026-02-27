@@ -9,6 +9,13 @@ import { getPrisma, getDraftsService } from './instances';
 import { JOB_NAMES, QUEUE_NAMES, draftQueue } from './queues';
 import { DraftsService } from '../modules/drafts/drafts.service';
 import { PrismaClient } from '@prisma/client';
+import {
+  notifyDraftWindowOpen,
+  notifyDraftWindowClosing,
+  notifyYourTurn,
+  notifyPickExpired,
+  notifyDraftCompleted,
+} from '../modules/notifications/notifications.service';
 
 // Redis connection for worker
 const connection = new IORedis({
@@ -64,6 +71,9 @@ export const draftWorker = new Worker<
         case JOB_NAMES.DRAFT_AUTO_PICK:
           return await handleDraftAutoPick(job as Job<DraftAutoPickJobData>);
 
+        case 'draft.window.closing_reminder':
+          return await handleDraftWindowClosingReminder(job as Job<DraftWindowCloseJobData>);
+
         default:
           throw new Error(`Unknown job name: ${job.name}`);
       }
@@ -105,6 +115,11 @@ async function handleDraftWindowOpen(job: Job<DraftWindowOpenJobData>) {
     include: { league: { include: { members: { where: { leftAt: null } } } } },
   });
 
+  // Get race details for notifications
+  const race = await prisma.race.findUnique({
+    where: { id: raceId },
+  });
+
   for (const window of windows) {
     // Schedule window close job at closesAt time
     const closeDelay = window.closesAt.getTime() - Date.now();
@@ -114,6 +129,16 @@ async function handleDraftWindowOpen(job: Job<DraftWindowOpenJobData>) {
         { draftWindowId: window.id, leagueId: window.leagueId },
         { delay: closeDelay, jobId: `close-${window.id}` }
       );
+
+      // Schedule "24h before close" reminder notifications
+      const reminderDelay = closeDelay - (24 * 60 * 60 * 1000); // 24 hours before close
+      if (reminderDelay > 0) {
+        await draftQueue.add(
+          'draft.window.closing_reminder',
+          { draftWindowId: window.id, leagueId: window.leagueId },
+          { delay: reminderDelay, jobId: `closing-reminder-${window.id}` }
+        );
+      }
     }
 
     // Schedule auto-pick checks for each member at their turn expiry
@@ -130,6 +155,31 @@ async function handleDraftWindowOpen(job: Job<DraftWindowOpenJobData>) {
         { draftWindowId: window.id, leagueMemberId: firstMember.id, userId: firstMember.userId },
         { delay: autoPickDelay, jobId: `autopick-${window.id}-${firstMember.id}-r1` }
       );
+
+      // Notify first member it's their turn
+      if (race) {
+        await notifyYourTurn({
+          userId: firstMember.userId,
+          leagueId: window.leagueId,
+          leagueName: window.league.name,
+          raceName: race.raceName,
+          round: 1,
+          pickNumber: 1,
+        });
+      }
+    }
+
+    // Send "draft window open" notification to all league members
+    if (race) {
+      for (const member of members) {
+        await notifyDraftWindowOpen({
+          userId: member.userId,
+          leagueId: window.leagueId,
+          leagueName: window.league.name,
+          raceId: race.id,
+          raceName: race.raceName,
+        });
+      }
     }
   }
 
@@ -196,16 +246,40 @@ async function handleDraftWindowClose(job: Job<DraftWindowCloseJobData>) {
   // Close the window
   const allPicked = await draftsService.checkAllPicksSubmitted(draftWindowId);
 
+  const newStatus = allPicked ? 'completed' : 'closed';
+
   await prisma.draftWindow.update({
     where: { id: draftWindowId },
-    data: { status: allPicked ? 'completed' : 'closed' },
+    data: { status: newStatus },
   });
 
-  console.log(`[DraftWorker] Draft window ${draftWindowId} ${allPicked ? 'completed' : 'closed'}`);
+  // Send draft completed notification to all members
+  if (newStatus === 'completed') {
+    const windowWithRace = await prisma.draftWindow.findUnique({
+      where: { id: draftWindowId },
+      include: {
+        race: true,
+        league: true,
+      },
+    });
+
+    if (windowWithRace) {
+      for (const member of window.league.members) {
+        await notifyDraftCompleted({
+          userId: member.userId,
+          leagueId: window.leagueId,
+          leagueName: window.league.name,
+          raceName: windowWithRace.race?.raceName || 'the race',
+        });
+      }
+    }
+  }
+
+  console.log(`[DraftWorker] Draft window ${draftWindowId} ${newStatus}`);
 
   return {
     success: true,
-    status: allPicked ? 'completed' : 'closed',
+    status: newStatus,
   };
 }
 
@@ -241,10 +315,44 @@ async function handleDraftPickTimeout(job: Job<DraftPickTimeoutJobData>) {
     return { success: true, skipped: 'Not this member\'s turn' };
   }
 
+  // Get the draft window and league for notifications
+  const draftWindow = await prisma.draftWindow.findUnique({
+    where: { id: draftWindowId },
+    include: {
+      league: true,
+      race: true,
+    },
+  });
+
+  // Get member details
+  const member = await prisma.leagueMember.findUnique({
+    where: { id: leagueMemberId },
+  });
+
   // Resolve the missed pick
   const result = await draftsService.resolveMissedPick(draftWindowId, leagueMemberId);
 
-  // Schedule auto-pick check for next member
+  // Send "pick expired" notification to the affected member
+  if (result.success && member && draftWindow) {
+    // Get the assigned driver (if any)
+    const assignedPick = await prisma.draftPick.findFirst({
+      where: { draftWindowId, leagueMemberId, round },
+      include: { driver: true },
+    });
+
+    const driverName = assignedPick?.driver
+      ? `${assignedPick.driver.givenName} ${assignedPick.driver.familyName}`
+      : 'No driver assigned';
+
+    await notifyPickExpired({
+      userId: member.userId,
+      leagueId: draftWindow.leagueId,
+      leagueName: draftWindow.league.name,
+      driverName,
+    });
+  }
+
+  // Schedule auto-pick check for next member and notify them it's their turn
   if (result.success) {
     const updatedState = await draftsService.getDraftState(draftWindowId);
     if (updatedState && updatedState.currentTurnMemberId && updatedState.status === 'open') {
@@ -255,12 +363,22 @@ async function handleDraftPickTimeout(job: Job<DraftPickTimeoutJobData>) {
         where: { id: updatedState.currentTurnMemberId },
       });
 
-      if (nextMember) {
+      if (nextMember && draftWindow) {
         await draftQueue.add(
           JOB_NAMES.DRAFT_AUTO_PICK,
           { draftWindowId, leagueMemberId: nextMember.id, userId: nextMember.userId },
           { delay: autoPickDelay, jobId: `autopick-${draftWindowId}-${nextMember.id}-r${updatedState.currentRound}` }
         );
+
+        // Notify next member it's their turn
+        await notifyYourTurn({
+          userId: nextMember.userId,
+          leagueId: draftWindow.leagueId,
+          leagueName: draftWindow.league.name,
+          raceName: draftWindow.race?.raceName || 'Unknown Race',
+          round: updatedState.currentRound,
+          pickNumber: updatedState.currentPickPosition,
+        });
       }
     }
   }
@@ -268,6 +386,64 @@ async function handleDraftPickTimeout(job: Job<DraftPickTimeoutJobData>) {
   return {
     success: result.success,
     error: result.error,
+  };
+}
+
+/**
+ * Handle draft window closing reminder job
+ * Sends 24h reminder to members who haven't completed their picks
+ */
+async function handleDraftWindowClosingReminder(job: Job<DraftWindowCloseJobData>) {
+  const { draftWindowId, leagueId } = job.data;
+  const prisma = getPrisma();
+
+  console.log(`[DraftWorker] Sending closing reminder for draft window ${draftWindowId}`);
+
+  // Get the draft window with picks and members
+  const window = await prisma.draftWindow.findUnique({
+    where: { id: draftWindowId },
+    include: {
+      league: true,
+      picks: true,
+      race: true,
+    },
+  });
+
+  if (!window || window.status !== 'open') {
+    return { success: true, skipped: 'Window not open' };
+  }
+
+  // Get all league members
+  const members = await prisma.leagueMember.findMany({
+    where: { leagueId, leftAt: null },
+  });
+
+  // Find members who haven't completed both picks
+  const memberPickCounts = new Map<string, number>();
+  for (const pick of window.picks) {
+    const count = memberPickCounts.get(pick.leagueMemberId) || 0;
+    memberPickCounts.set(pick.leagueMemberId, count + 1);
+  }
+
+  const incompleteMembers = members.filter(m => (memberPickCounts.get(m.id) || 0) < 2);
+
+  // Send reminder notification to incomplete members
+  for (const member of incompleteMembers) {
+    const isComplete = (memberPickCounts.get(member.id) || 0) >= 2;
+    await notifyDraftWindowClosing({
+      userId: member.userId,
+      leagueId,
+      leagueName: window.league.name,
+      raceName: window.race.raceName,
+      isComplete,
+    });
+  }
+
+  console.log(`[DraftWorker] Sent closing reminders to ${incompleteMembers.length} members`);
+
+  return {
+    success: true,
+    remindersSent: incompleteMembers.length,
   };
 }
 

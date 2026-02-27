@@ -807,9 +807,9 @@
       ],
       "dependencies": ["US-011", "US-012", "US-014", "US-023", "US-024"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "See PRD Table: Notification Types & Templates",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-27. Integrated notification calls into draft.worker.ts for: draft_window_open, draft_window_closing (24h reminder), draft_your_turn, draft_pick_expired, draft_completed. Driver substitution already had notification handling in drafts.service.ts from US-014.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -827,9 +827,9 @@
       ],
       "dependencies": ["US-007"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Super admin role only, accessible at /admin",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-27. Created dedicated admin module with: (1) Dashboard stats - GET /admin/stats, (2) User management - GET/PATCH /admin/users, (3) System settings - GET/PATCH /admin/settings, (4) Audit log - GET /admin/audit-log, (5) Commissioner flags - GET/PATCH /admin/flags, (6) Notification log - GET /admin/notifications. Race data management already exists in f1data module under /admin prefix. All changes logged to audit_log table.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {

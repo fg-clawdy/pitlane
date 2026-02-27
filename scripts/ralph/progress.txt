@@ -51,11 +51,7 @@
 | US-048 | Background Jobs - Draft System | EPIC-011 | done | true |
 | US-049 | Background Jobs - Scoring & Notifications | EPIC-011 | done | true |
 
-## Pending User Stories (11)
-| ID | Title | Epic | Status | Priority |
-|----|-------|------|--------|----------|
-| US-026 | Draft Event Notifications | EPIC-007 | pending | 2 |
-| US-027 | Admin Dashboard | EPIC-008 | pending | 2 |
+## Pending User Stories (9)
 | US-028 | Admin Race Data Entry | EPIC-008 | pending | 2 |
 | US-029 | System Configuration (Admin) | EPIC-008 | pending | 3 |
 | US-036 | League Settings & Member Management | EPIC-009 | pending | 2 |
