@@ -121,6 +121,68 @@ export interface NotificationLogOutput {
   createdAt: Date;
 }
 
+// Finish status enum for race results
+export type FinishStatus = 'Finished' | 'DNF' | 'DNS' | 'DSQ' | 'Other';
+
+// Manual race result entry
+export interface ManualRaceResultInput {
+  raceId: string;
+  driverId: string;
+  position: number;
+  finishStatus: FinishStatus;
+  fastestLap?: boolean;
+  time?: string;
+  points?: number;
+  adminProtected?: boolean;
+  notes?: string;
+}
+
+export interface BulkRaceResultInput {
+  raceId: string;
+  results: Array<{
+    driverCode: string;
+    position: number;
+    finishStatus: FinishStatus;
+    fastestLap?: boolean;
+    time?: string;
+  }>;
+}
+
+export interface RaceResultOutput {
+  id: string;
+  raceId: string;
+  raceName: string;
+  driverId: string;
+  driverCode: string;
+  driverName: string;
+  position: number;
+  points: number;
+  status: string;
+  finishStatus: FinishStatus;
+  fastestLap: boolean;
+  time?: string;
+  adminProtected: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface RaceWithDriversOutput {
+  id: string;
+  raceName: string;
+  round: number;
+  date: Date;
+  seasonYear: number;
+  drivers: Array<{
+    id: string;
+    driverId: string;
+    code: string;
+    givenName: string;
+    familyName: string;
+    permanentNumber: number | null;
+  }>;
+  existingResults: RaceResultOutput[];
+}
+
 // Dashboard stats
 export interface AdminDashboardStats {
   users: {

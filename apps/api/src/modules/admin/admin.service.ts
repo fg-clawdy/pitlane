@@ -18,6 +18,11 @@ import {
   NotificationLogListParams,
   NotificationLogOutput,
   AdminDashboardStats,
+  ManualRaceResultInput,
+  BulkRaceResultInput,
+  RaceResultOutput,
+  RaceWithDriversOutput,
+  FinishStatus,
 } from './admin.types';
 
 const prisma = new PrismaClient();
@@ -651,4 +656,546 @@ export async function listNotificationLog(params: NotificationLogListParams): Pr
     page,
     totalPages: Math.ceil(total / limit),
   };
+}
+
+// ========== RACE DATA ENTRY METHODS ==========
+
+/**
+ * Get races list for admin data entry
+ */
+export async function listRacesForAdmin(params: {
+  page?: number;
+  limit?: number;
+  seasonYear?: number;
+  hasResults?: boolean;
+}): Promise<{
+  races: Array<{
+    id: string;
+    raceName: string;
+    round: number;
+    date: Date;
+    seasonYear: number;
+    circuitName: string;
+    resultCount: number;
+  }>;
+  total: number;
+  page: number;
+  totalPages: number;
+}> {
+  const { page = 1, limit = 20, seasonYear, hasResults } = params;
+
+  const where: any = {};
+
+  if (seasonYear) {
+    where.season = { year: seasonYear };
+  }
+
+  if (hasResults !== undefined) {
+    if (hasResults) {
+      where.results = { some: {} };
+    } else {
+      where.results = { none: {} };
+    }
+  }
+
+  const [races, total] = await Promise.all([
+    prisma.race.findMany({
+      where,
+      orderBy: [{ season: { year: 'desc' } }, { round: 'asc' }],
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        season: true,
+        _count: {
+          select: { results: true },
+        },
+      },
+    }),
+    prisma.race.count({ where }),
+  ]);
+
+  return {
+    races: races.map((r) => ({
+      id: r.id,
+      raceName: r.raceName,
+      round: r.round,
+      date: r.date,
+      seasonYear: r.season.year,
+      circuitName: r.circuitName,
+      resultCount: r._count.results,
+    })),
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
+/**
+ * Get a race with drivers for data entry form
+ */
+export async function getRaceForDataEntry(raceId: string): Promise<RaceWithDriversOutput | null> {
+  const race = await prisma.race.findUnique({
+    where: { id: raceId },
+    include: {
+      season: {
+        include: {
+          drivers: {
+            orderBy: { familyName: 'asc' },
+          },
+        },
+      },
+      results: {
+        include: {
+          driver: true,
+        },
+        orderBy: { position: 'asc' },
+      },
+    },
+  });
+
+  if (!race) return null;
+
+  return {
+    id: race.id,
+    raceName: race.raceName,
+    round: race.round,
+    date: race.date,
+    seasonYear: race.season.year,
+    drivers: race.season.drivers.map((d) => ({
+      id: d.id,
+      driverId: d.driverId,
+      code: d.code,
+      givenName: d.givenName,
+      familyName: d.familyName,
+      permanentNumber: d.permanentNumber,
+    })),
+    existingResults: race.results.map((r) => ({
+      id: r.id,
+      raceId: race.id,
+      raceName: race.raceName,
+      driverId: r.driverId,
+      driverCode: r.driver.code,
+      driverName: `${r.driver.givenName} ${r.driver.familyName}`,
+      position: r.position,
+      points: r.points,
+      status: r.status,
+      finishStatus: mapStatusToFinishStatus(r.status),
+      fastestLap: r.fastestLap,
+      time: r.time || undefined,
+      adminProtected: r.adminProtected,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    })),
+  };
+}
+
+/**
+ * Map status string to FinishStatus enum
+ */
+function mapStatusToFinishStatus(status: string): FinishStatus {
+  if (status === 'Finished' || status.startsWith('+')) {
+    return 'Finished';
+  }
+  if (status === 'DNF') return 'DNF';
+  if (status === 'DNS') return 'DNS';
+  if (status === 'DSQ') return 'DSQ';
+  return 'Other';
+}
+
+/**
+ * Calculate points based on position using FIA scoring
+ */
+function calculateFIAPoints(position: number, fastestLap: boolean, finishStatus: FinishStatus): number {
+  if (finishStatus !== 'Finished') return 0;
+  
+  const fiaPoints: Record<number, number> = {
+    1: 25, 2: 18, 3: 15, 4: 12, 5: 10,
+    6: 8, 7: 6, 8: 4, 9: 2, 10: 1,
+  };
+  
+  let points = fiaPoints[position] || 0;
+  
+  // Fastest lap bonus (only if finished in top 10)
+  if (fastestLap && position <= 10) {
+    points += 1;
+  }
+  
+  return points;
+}
+
+/**
+ * Enter a manual race result
+ */
+export async function enterRaceResult(
+  input: ManualRaceResultInput,
+  adminUserId: string
+): Promise<{ success: boolean; error?: string; result?: RaceResultOutput }> {
+  try {
+    // Validate race exists
+    const race = await prisma.race.findUnique({
+      where: { id: input.raceId },
+      include: { season: true },
+    });
+
+    if (!race) {
+      return { success: false, error: 'Race not found' };
+    }
+
+    // Validate driver exists and belongs to the season
+    const driver = await prisma.driver.findFirst({
+      where: {
+        id: input.driverId,
+        seasonId: race.seasonId,
+      },
+    });
+
+    if (!driver) {
+      return { success: false, error: 'Driver not found or not in this season' };
+    }
+
+    // Validate position
+    if (input.position < 1 || input.position > 20) {
+      return { success: false, error: 'Position must be between 1 and 20' };
+    }
+
+    // Calculate points if not provided
+    const points = input.points ?? calculateFIAPoints(input.position, input.fastestLap || false, input.finishStatus);
+
+    // Determine status string
+    const status = input.finishStatus === 'Finished' ? 'Finished' : input.finishStatus;
+
+    // Check if result already exists for this driver in this race
+    const existingResult = await prisma.raceResult.findUnique({
+      where: {
+        raceId_driverId: {
+          raceId: input.raceId,
+          driverId: input.driverId,
+        },
+      },
+    });
+
+    let result;
+    if (existingResult) {
+      // Update existing result
+      result = await prisma.raceResult.update({
+        where: { id: existingResult.id },
+        data: {
+          position: input.position,
+          points,
+          status,
+          time: input.time,
+          fastestLap: input.fastestLap || false,
+          adminProtected: input.adminProtected ?? true,
+          adminValue: {
+            position: input.position,
+            points,
+            status,
+            time: input.time,
+            fastestLap: input.fastestLap,
+            notes: input.notes,
+          },
+        },
+        include: {
+          driver: true,
+          race: true,
+        },
+      });
+    } else {
+      // Create new result
+      result = await prisma.raceResult.create({
+        data: {
+          raceId: input.raceId,
+          driverId: input.driverId,
+          position: input.position,
+          points,
+          status,
+          time: input.time,
+          fastestLap: input.fastestLap || false,
+          adminProtected: input.adminProtected ?? true,
+          adminValue: {
+            position: input.position,
+            points,
+            status,
+            time: input.time,
+            fastestLap: input.fastestLap,
+            notes: input.notes,
+          },
+        },
+        include: {
+          driver: true,
+          race: true,
+        },
+      });
+    }
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: existingResult ? 'race_result_update' : 'race_result_create',
+        entityType: 'RaceResult',
+        entityId: result.id,
+        changes: {
+          raceName: race.raceName,
+          driver: `${driver.givenName} ${driver.familyName}`,
+          position: input.position,
+          finishStatus: input.finishStatus,
+          points,
+          fastestLap: input.fastestLap,
+          adminProtected: input.adminProtected,
+          notes: input.notes,
+        },
+      },
+    });
+
+    // Trigger score recalculation
+    await triggerScoreRecalculation(input.raceId);
+
+    return {
+      success: true,
+      result: {
+        id: result.id,
+        raceId: result.raceId,
+        raceName: result.race.raceName,
+        driverId: result.driverId,
+        driverCode: result.driver.code,
+        driverName: `${result.driver.givenName} ${result.driver.familyName}`,
+        position: result.position,
+        points: result.points,
+        status: result.status,
+        finishStatus: mapStatusToFinishStatus(result.status),
+        fastestLap: result.fastestLap,
+        time: result.time || undefined,
+        adminProtected: result.adminProtected,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+      },
+    };
+  } catch (error) {
+    console.error('[AdminService] Error entering race result:', error);
+    return { success: false, error: `Failed to enter result: ${error}` };
+  }
+}
+
+/**
+ * Bulk enter race results from CSV-like data
+ */
+export async function bulkEnterRaceResults(
+  input: BulkRaceResultInput,
+  adminUserId: string
+): Promise<{ success: boolean; error?: string; results?: RaceResultOutput[]; errors?: string[] }> {
+  try {
+    // Validate race exists
+    const race = await prisma.race.findUnique({
+      where: { id: input.raceId },
+      include: {
+        season: {
+          include: { drivers: true },
+        },
+      },
+    });
+
+    if (!race) {
+      return { success: false, error: 'Race not found' };
+    }
+
+    // Build driver code to driver map
+    const driverMap = new Map<string, typeof race.season.drivers[0]>();
+    for (const driver of race.season.drivers) {
+      driverMap.set(driver.code.toUpperCase(), driver);
+      driverMap.set(driver.driverId.toUpperCase(), driver);
+    }
+
+    const results: RaceResultOutput[] = [];
+    const errors: string[] = [];
+
+    for (const resultInput of input.results) {
+      // Find driver by code
+      const driver = driverMap.get(resultInput.driverCode.toUpperCase());
+      if (!driver) {
+        errors.push(`Driver not found: ${resultInput.driverCode}`);
+        continue;
+      }
+
+      const points = calculateFIAPoints(resultInput.position, resultInput.fastestLap || false, resultInput.finishStatus);
+      const status = resultInput.finishStatus === 'Finished' ? 'Finished' : resultInput.finishStatus;
+
+      try {
+        // Check for existing result
+        const existingResult = await prisma.raceResult.findUnique({
+          where: {
+            raceId_driverId: {
+              raceId: input.raceId,
+              driverId: driver.id,
+            },
+          },
+        });
+
+        let result;
+        if (existingResult) {
+          result = await prisma.raceResult.update({
+            where: { id: existingResult.id },
+            data: {
+              position: resultInput.position,
+              points,
+              status,
+              time: resultInput.time,
+              fastestLap: resultInput.fastestLap || false,
+              adminProtected: true,
+              adminValue: {
+                position: resultInput.position,
+                points,
+                status,
+                time: resultInput.time,
+                fastestLap: resultInput.fastestLap,
+              },
+            },
+            include: { driver: true, race: true },
+          });
+        } else {
+          result = await prisma.raceResult.create({
+            data: {
+              raceId: input.raceId,
+              driverId: driver.id,
+              position: resultInput.position,
+              points,
+              status,
+              time: resultInput.time,
+              fastestLap: resultInput.fastestLap || false,
+              adminProtected: true,
+              adminValue: {
+                position: resultInput.position,
+                points,
+                status,
+                time: resultInput.time,
+                fastestLap: resultInput.fastestLap,
+              },
+            },
+            include: { driver: true, race: true },
+          });
+        }
+
+        results.push({
+          id: result.id,
+          raceId: result.raceId,
+          raceName: result.race.raceName,
+          driverId: result.driverId,
+          driverCode: result.driver.code,
+          driverName: `${result.driver.givenName} ${result.driver.familyName}`,
+          position: result.position,
+          points: result.points,
+          status: result.status,
+          finishStatus: mapStatusToFinishStatus(result.status),
+          fastestLap: result.fastestLap,
+          time: result.time || undefined,
+          adminProtected: result.adminProtected,
+          createdAt: result.createdAt,
+          updatedAt: result.updatedAt,
+        });
+      } catch (err) {
+        errors.push(`Failed to save result for ${resultInput.driverCode}: ${err}`);
+      }
+    }
+
+    // Create audit log for bulk operation
+    await prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: 'race_result_bulk_create',
+        entityType: 'Race',
+        entityId: input.raceId,
+        changes: {
+          raceName: race.raceName,
+          resultsEntered: results.length,
+          errors: errors.length,
+          inputData: input.results,
+        },
+      },
+    });
+
+    // Trigger score recalculation
+    await triggerScoreRecalculation(input.raceId);
+
+    return {
+      success: true,
+      results,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  } catch (error) {
+    console.error('[AdminService] Error bulk entering results:', error);
+    return { success: false, error: `Bulk entry failed: ${error}` };
+  }
+}
+
+/**
+ * Delete a race result
+ */
+export async function deleteRaceResult(
+  resultId: string,
+  adminUserId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const result = await prisma.raceResult.findUnique({
+      where: { id: resultId },
+      include: { race: true, driver: true },
+    });
+
+    if (!result) {
+      return { success: false, error: 'Result not found' };
+    }
+
+    await prisma.raceResult.delete({
+      where: { id: resultId },
+    });
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: adminUserId,
+        action: 'race_result_delete',
+        entityType: 'RaceResult',
+        entityId: resultId,
+        changes: {
+          raceName: result.race.raceName,
+          driver: `${result.driver.givenName} ${result.driver.familyName}`,
+          position: result.position,
+          points: result.points,
+        },
+      },
+    });
+
+    // Trigger score recalculation
+    await triggerScoreRecalculation(result.raceId);
+
+    return { success: true };
+  } catch (error) {
+    console.error('[AdminService] Error deleting result:', error);
+    return { success: false, error: `Failed to delete result: ${error}` };
+  }
+}
+
+/**
+ * Trigger score recalculation for a race
+ */
+async function triggerScoreRecalculation(raceId: string): Promise<void> {
+  try {
+    const { ScoringService } = await import('../scoring/scoring.service.js');
+    const scoringService = new ScoringService(prisma);
+
+    // Get all leagues that have drafts for this race
+    const draftWindows = await prisma.draftWindow.findMany({
+      where: { raceId },
+      select: { leagueId: true },
+    });
+
+    const leagueIds = [...new Set(draftWindows.map((dw) => dw.leagueId))];
+
+    for (const leagueId of leagueIds) {
+      await scoringService.calculateRaceScores(leagueId, raceId);
+    }
+
+    console.log(`[AdminService] Recalculated scores for race ${raceId} in ${leagueIds.length} leagues`);
+  } catch (error) {
+    console.error('[AdminService] Score recalculation failed:', error);
+  }
 }

@@ -846,9 +846,9 @@
       ],
       "dependencies": ["US-027"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Used when Jolpica fails or returns incorrect data",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-27. Implemented manual race result entry with bulk CSV support in admin module. Endpoints: GET /admin/races, GET /admin/races/:raceId, POST /admin/races/:raceId/results, POST /admin/races/:raceId/results/bulk, DELETE /admin/races/results/:resultId. Finish status enum (Finished, DNF, DNS, DSQ, Other). Auto-calculates FIA points. Triggers score recalculation on save.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {

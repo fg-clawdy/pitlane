@@ -16,7 +16,13 @@ import {
   listCommissionerFlags,
   updateCommissionerFlag,
   listNotificationLog,
+  listRacesForAdmin,
+  getRaceForDataEntry,
+  enterRaceResult,
+  bulkEnterRaceResults,
+  deleteRaceResult,
 } from './admin.service';
+import { FinishStatus } from './admin.types';
 
 // Dashboard stats
 export async function getDashboardStatsHandler(
@@ -40,6 +46,95 @@ export async function listUsersHandler(
     role, 
     status: status as 'active' | 'suspended' | 'pending_verification' | undefined 
   });
+  return reply.send(result);
+}
+
+// Race data entry
+export async function listRacesHandler(
+  request: FastifyRequest<{ Querystring: { page?: number; limit?: number; seasonYear?: number; hasResults?: boolean } }>,
+  reply: FastifyReply
+) {
+  const { page, limit, seasonYear, hasResults } = request.query;
+  const result = await listRacesForAdmin({ page, limit, seasonYear, hasResults });
+  return reply.send(result);
+}
+
+export async function getRaceForEntryHandler(
+  request: FastifyRequest<{ Params: { raceId: string } }>,
+  reply: FastifyReply
+) {
+  const { raceId } = request.params;
+  const race = await getRaceForDataEntry(raceId);
+  
+  if (!race) {
+    return reply.code(404).send({ success: false, error: 'Race not found' });
+  }
+  
+  return reply.send({ success: true, race });
+}
+
+export async function enterRaceResultHandler(
+  request: FastifyRequest<{ Body: {
+    raceId: string;
+    driverId: string;
+    position: number;
+    finishStatus: FinishStatus;
+    fastestLap?: boolean;
+    time?: string;
+    points?: number;
+    adminProtected?: boolean;
+    notes?: string;
+  } }>,
+  reply: FastifyReply
+) {
+  const adminUserId = (request as any).user?.id || 'system';
+  
+  const result = await enterRaceResult(request.body, adminUserId);
+  
+  if (!result.success) {
+    return reply.code(400).send(result);
+  }
+  
+  return reply.send(result);
+}
+
+export async function bulkEnterRaceResultsHandler(
+  request: FastifyRequest<{ Body: {
+    raceId: string;
+    results: Array<{
+      driverCode: string;
+      position: number;
+      finishStatus: FinishStatus;
+      fastestLap?: boolean;
+      time?: string;
+    }>;
+  } }>,
+  reply: FastifyReply
+) {
+  const adminUserId = (request as any).user?.id || 'system';
+  
+  const result = await bulkEnterRaceResults(request.body, adminUserId);
+  
+  if (!result.success) {
+    return reply.code(400).send(result);
+  }
+  
+  return reply.send(result);
+}
+
+export async function deleteRaceResultHandler(
+  request: FastifyRequest<{ Params: { resultId: string } }>,
+  reply: FastifyReply
+) {
+  const { resultId } = request.params;
+  const adminUserId = (request as any).user?.id || 'system';
+  
+  const result = await deleteRaceResult(resultId, adminUserId);
+  
+  if (!result.success) {
+    return reply.code(400).send(result);
+  }
+  
   return reply.send(result);
 }
 

@@ -16,6 +16,11 @@ import {
   listCommissionerFlagsHandler,
   updateCommissionerFlagHandler,
   listNotificationLogHandler,
+  listRacesHandler,
+  getRaceForEntryHandler,
+  enterRaceResultHandler,
+  bulkEnterRaceResultsHandler,
+  deleteRaceResultHandler,
 } from './admin.controller';
 
 /**
@@ -44,4 +49,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Notification log
   fastify.get('/admin/notifications', listNotificationLogHandler);
+
+  // Race data entry
+  fastify.get('/admin/races', listRacesHandler);
+  fastify.get('/admin/races/:raceId', getRaceForEntryHandler);
+  fastify.post('/admin/races/:raceId/results', enterRaceResultHandler);
+  fastify.post('/admin/races/:raceId/results/bulk', bulkEnterRaceResultsHandler);
+  fastify.delete('/admin/races/results/:resultId', deleteRaceResultHandler);
 }

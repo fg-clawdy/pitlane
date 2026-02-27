@@ -170,6 +170,37 @@
   - DGE condition: `driver1Score === 0 && driver2Score === 0 && driver1Id !== null && driver2Id !== null`
   - LeagueMemberStat tracks cumulative dgeCount across season
 
+### 2026-02-27: US-028 Admin Race Data Entry
+- Added types to `apps/api/src/modules/admin/admin.types.ts`:
+  - FinishStatus type: Finished, DNF, DNS, DSQ, Other
+  - ManualRaceResultInput for single result entry
+  - BulkRaceResultInput for CSV-style bulk entry
+  - RaceResultOutput and RaceWithDriversOutput for responses
+- Added service functions to `apps/api/src/modules/admin/admin.service.ts`:
+  - listRacesForAdmin: paginated race list with filter by season/hasResults
+  - getRaceForDataEntry: race details with drivers and existing results
+  - enterRaceResult: create/update single result with validation
+  - bulkEnterRaceResults: bulk entry via driver code mapping
+  - deleteRaceResult: remove a result
+  - calculateFIAPoints: auto-calculate FIA points (25-18-15-12-10-8-6-4-2-1 + fastest lap)
+  - triggerScoreRecalculation: recalculate scores after changes
+- Added handlers to `apps/api/src/modules/admin/admin.controller.ts`
+- Added routes to `apps/api/src/modules/admin/admin.routes.ts`:
+  - GET /admin/races - list races for data entry
+  - GET /admin/races/:raceId - get race with drivers
+  - POST /admin/races/:raceId/results - enter single result
+  - POST /admin/races/:raceId/results/bulk - bulk entry via CSV
+  - DELETE /admin/races/results/:resultId - delete result
+- All operations create audit logs
+- TypeScript compiles successfully
+- **Learnings for future iterations:**
+  - FIA points auto-calculated for positions 1-10 (25-18-15-12-10-8-6-4-2-1)
+  - Fastest lap bonus (+1) only if position <= 10 and finishStatus = Finished
+  - DNF/DNS/DSQ all score 0 points
+  - adminProtected defaults to true for manual entries
+  - Bulk entry uses driverCode (e.g., "VER", "HAM") to match drivers
+  - Score recalculation triggered automatically after any result change
+
 ## Notes
 - TypeScript compiles successfully
 - All existing tests should still pass
