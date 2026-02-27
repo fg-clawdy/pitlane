@@ -450,6 +450,431 @@ export class F1DataService {
 
     return race?.results || [];
   }
+
+  // ========== ADMIN DATA OVERRIDE METHODS ==========
+
+  /**
+   * Override a race result field with admin value
+   * @param resultId - The race result ID to override
+   * @param field - The field to override (position, points, status, time, fastestLap)
+   * @param adminValue - The admin-provided value
+   * @param adminProtected - Whether to protect from future Jolpica overwrites
+   * @param adminUserId - The admin user performing the action
+   */
+  async overrideRaceResult(
+    resultId: string,
+    field: string,
+    adminValue: any,
+    adminProtected: boolean,
+    adminUserId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Get current race result with jolpica value
+      const result = await this.prisma.raceResult.findUnique({
+        where: { id: resultId },
+        include: { race: { include: { season: true } }, driver: true }
+      });
+
+      if (!result) {
+        return { success: false, error: 'Race result not found' };
+      }
+
+      // Get the current Jolpica value for this field
+      const currentJolpicaValue = (result.jolpicaValue as any)?.[field];
+
+      // If field value is changing, create a discrepancy record
+      if (currentJolpicaValue !== undefined && currentJolpicaValue !== adminValue) {
+        await this.prisma.dataDiscrepancy.create({
+          data: {
+            raceResultId: resultId,
+            field,
+            jolpicaValue: currentJolpicaValue,
+            adminValue
+          }
+        });
+      }
+
+      // Build the admin value JSON
+      const currentAdminValue = (result.adminValue as any) || {};
+      const updatedAdminValue = {
+        ...currentAdminValue,
+        [field]: adminValue
+      };
+
+      // Update the race result
+      await this.prisma.raceResult.update({
+        where: { id: resultId },
+        data: {
+          adminValue: updatedAdminValue,
+          adminProtected,
+          // Update the actual field if protected
+          ...(adminProtected && this.getFieldUpdateObject(field, adminValue))
+        }
+      });
+
+      // Create audit log
+      await this.prisma.auditLog.create({
+        data: {
+          userId: adminUserId,
+          action: 'race_result_override',
+          entityType: 'RaceResult',
+          entityId: resultId,
+          changes: {
+            field,
+            previousValue: currentJolpicaValue,
+            newValue: adminValue,
+            adminProtected,
+            raceName: result.race.raceName,
+            driver: `${result.driver.givenName} ${result.driver.familyName}`
+          }
+        }
+      });
+
+      // Trigger score recalculation
+      await this.triggerScoreRecalculation(result.raceId);
+
+      // Notify commissioners
+      await this.notifyCommissionersOfOverride(result.race, field, adminValue);
+
+      return { success: true };
+    } catch (error) {
+      console.error('[F1DataService] Override failed:', error);
+      return { success: false, error: `Override failed: ${error}` };
+    }
+  }
+
+  /**
+   * Get field update object based on field name
+   */
+  private getFieldUpdateObject(field: string, value: any): any {
+    switch (field) {
+      case 'position':
+        return { position: value };
+      case 'points':
+        return { points: value };
+      case 'status':
+        return { status: value };
+      case 'time':
+        return { time: value };
+      case 'fastestLap':
+        return { fastestLap: value };
+      default:
+        return {};
+    }
+  }
+
+  /**
+   * Create a driver substitution
+   * @param raceId - The race ID
+   * @param originalDriverId - The original driver ID
+   * @param replacementDriverId - The replacement driver ID (null if DNS)
+   * @param reason - Reason for substitution
+   * @param adminUserId - The admin user performing the action
+   */
+  async createDriverSubstitution(
+    raceId: string,
+    originalDriverId: string,
+    replacementDriverId: string | null,
+    reason: string,
+    adminUserId: string
+  ): Promise<{ success: boolean; error?: string; substitutionId?: string }> {
+    try {
+      const race = await this.prisma.race.findUnique({
+        where: { id: raceId },
+        include: { season: true }
+      });
+
+      if (!race) {
+        return { success: false, error: 'Race not found' };
+      }
+
+      const originalDriver = await this.prisma.driver.findUnique({
+        where: { id: originalDriverId }
+      });
+
+      if (!originalDriver) {
+        return { success: false, error: 'Original driver not found' };
+      }
+
+      let replacementDriver = null;
+      if (replacementDriverId) {
+        replacementDriver = await this.prisma.driver.findUnique({
+          where: { id: replacementDriverId }
+        });
+      }
+
+      // Create substitution record
+      const substitution = await this.prisma.driverSubstitution.create({
+        data: {
+          raceId,
+          originalDriverId,
+          replacementDriverId,
+          reason,
+          confirmedAt: new Date()
+        }
+      });
+
+      // Create audit log
+      await this.prisma.auditLog.create({
+        data: {
+          userId: adminUserId,
+          action: 'driver_substitution_create',
+          entityType: 'DriverSubstitution',
+          entityId: substitution.id,
+          changes: {
+            raceId,
+            raceName: race.raceName,
+            originalDriver: `${originalDriver.givenName} ${originalDriver.familyName}`,
+            replacementDriver: replacementDriver ? `${replacementDriver.givenName} ${replacementDriver.familyName}` : 'DNS (no substitute)',
+            reason
+          }
+        }
+      });
+
+      // If there's a replacement driver, update draft picks if needed
+      if (replacementDriverId) {
+        await this.updateDraftPicksForSubstitution(raceId, originalDriverId, replacementDriverId);
+      }
+
+      // Trigger score recalculation
+      await this.triggerScoreRecalculation(raceId);
+
+      return { success: true, substitutionId: substitution.id };
+    } catch (error) {
+      console.error('[F1DataService] Driver substitution failed:', error);
+      return { success: false, error: `Substitution failed: ${error}` };
+    }
+  }
+
+  /**
+   * Update draft picks when a driver is substituted
+   */
+  private async updateDraftPicksForSubstitution(
+    raceId: string,
+    originalDriverId: string,
+    replacementDriverId: string
+  ): Promise<void> {
+    // Find draft windows for this race
+    const draftWindows = await this.prisma.draftWindow.findMany({
+      where: { raceId }
+    });
+
+    for (const window of draftWindows) {
+      // Update any picks that used the original driver
+      await this.prisma.draftPick.updateMany({
+        where: {
+          draftWindowId: window.id,
+          driverId: originalDriverId
+        },
+        data: {
+          driverId: replacementDriverId,
+          resolutionMethod: 'admin_substitution'
+        }
+      });
+    }
+  }
+
+  /**
+   * Trigger score recalculation for a race
+   */
+  async triggerScoreRecalculation(raceId: string): Promise<void> {
+    try {
+      // Get the scoring service
+      const { ScoringService } = await import('../scoring/scoring.service.js');
+      const scoringService = new ScoringService(this.prisma);
+      
+      // Get all leagues for this race
+      const draftWindows = await this.prisma.draftWindow.findMany({
+        where: { raceId },
+        select: { leagueId: true }
+      });
+
+      const leagueIds = [...new Set(draftWindows.map(dw => dw.leagueId))];
+
+      // Recalculate scores for each league
+      for (const leagueId of leagueIds) {
+        await scoringService.calculateRaceScores(leagueId, raceId);
+      }
+
+      console.log(`[F1DataService] Recalculated scores for race ${raceId} in ${leagueIds.length} leagues`);
+    } catch (error) {
+      console.error('[F1DataService] Score recalculation failed:', error);
+    }
+  }
+
+  /**
+   * Notify commissioners of admin data override
+   */
+  private async notifyCommissionersOfOverride(
+    race: any,
+    field: string,
+    newValue: any
+  ): Promise<void> {
+    try {
+      // Find all leagues for this season
+      const leagues = await this.prisma.league.findMany({
+        where: { seasonId: race.seasonId }
+      });
+
+      // Get unique commissioner user IDs
+      const commissionerUserIds = new Set<string>();
+      for (const league of leagues) {
+        const firstMember = await this.prisma.leagueMember.findFirst({
+          where: { leagueId: league.id },
+          orderBy: { joinedAt: 'asc' }
+        });
+        if (firstMember) {
+          commissionerUserIds.add(firstMember.userId);
+        }
+      }
+
+      // Create notifications
+      for (const userId of commissionerUserIds) {
+        await this.prisma.notification.create({
+          data: {
+            userId,
+            type: 'data_discrepancy',
+            title: 'Race Data Overridden by Admin',
+            body: `Admin has overridden ${field} for ${race.raceName}. New value: ${newValue}. This may affect league scores.`,
+            data: {
+              raceId: race.id,
+              raceName: race.raceName,
+              field,
+              newValue
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[F1DataService] Failed to notify commissioners:', error);
+    }
+  }
+
+  /**
+   * Get admin override data for a race result
+   */
+  async getAdminOverrideData(resultId: string): Promise<any> {
+    const result = await this.prisma.raceResult.findUnique({
+      where: { id: resultId },
+      include: {
+        driver: true,
+        race: true,
+        discrepancies: {
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+
+    if (!result) return null;
+
+    return {
+      resultId: result.id,
+      raceName: result.race.raceName,
+      driver: `${result.driver.givenName} ${result.driver.familyName}`,
+      driverCode: result.driver.code,
+      currentPosition: result.position,
+      currentPoints: result.points,
+      currentStatus: result.status,
+      currentTime: result.time,
+      currentFastestLap: result.fastestLap,
+      jolpicaValue: result.jolpicaValue,
+      adminValue: result.adminValue,
+      adminProtected: result.adminProtected,
+      discrepancies: result.discrepancies
+    };
+  }
+
+  /**
+   * List all admin overrides for a race
+   */
+  async listRaceOverrides(raceId: string): Promise<any[]> {
+    const results = await this.prisma.raceResult.findMany({
+      where: { raceId },
+      include: {
+        driver: true,
+        discrepancies: {
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+
+    return results.map(result => ({
+      resultId: result.id,
+      driver: `${result.driver.givenName} ${result.driver.familyName}`,
+      driverCode: result.driver.code,
+      position: result.position,
+      points: result.points,
+      status: result.status,
+      adminProtected: result.adminProtected,
+      adminValue: result.adminValue,
+      hasDiscrepancies: result.discrepancies.length > 0,
+      discrepancyCount: result.discrepancies.length
+    }));
+  }
+
+  /**
+   * Resolve a data discrepancy
+   */
+  async resolveDiscrepancy(
+    discrepancyId: string,
+    resolution: 'accepted' | 'rejected',
+    adminUserId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const discrepancy = await this.prisma.dataDiscrepancy.findUnique({
+        where: { id: discrepancyId }
+      });
+
+      if (!discrepancy) {
+        return { success: false, error: 'Discrepancy not found' };
+      }
+
+      // Update the discrepancy record
+      await this.prisma.dataDiscrepancy.update({
+        where: { id: discrepancyId },
+        data: { resolvedAt: new Date() }
+      });
+
+      // If accepted, update the race result to match admin value
+      if (resolution === 'accepted' && discrepancy.adminValue !== undefined) {
+        const result = await this.prisma.raceResult.findUnique({
+          where: { id: discrepancy.raceResultId }
+        });
+
+        if (result) {
+          const adminVal = discrepancy.adminValue as any;
+          await this.prisma.raceResult.update({
+            where: { id: discrepancy.raceResultId },
+            data: this.getFieldUpdateObject(discrepancy.field, adminVal)
+          });
+
+          // Trigger recalculation
+          await this.triggerScoreRecalculation(result.raceId);
+        }
+      }
+
+      // Create audit log
+      await this.prisma.auditLog.create({
+        data: {
+          userId: adminUserId,
+          action: 'discrepancy_resolved',
+          entityType: 'DataDiscrepancy',
+          entityId: discrepancyId,
+          changes: {
+            field: discrepancy.field,
+            resolution,
+            previousJolpicaValue: discrepancy.jolpicaValue,
+            adminValue: discrepancy.adminValue
+          }
+        }
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('[F1DataService] Discrepancy resolution failed:', error);
+      return { success: false, error: `Resolution failed: ${error}` };
+    }
+  }
 }
 
 export default F1DataService;

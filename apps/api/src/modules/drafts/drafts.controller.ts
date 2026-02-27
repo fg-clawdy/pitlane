@@ -5,6 +5,7 @@
 
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { DraftsService } from './drafts.service';
+import { CommissionerOverrideInput, CommissionerAssignPickInput, SubmitRedraftInput } from './types';
 
 export class DraftsController {
   private draftsService: DraftsService;
@@ -229,6 +230,183 @@ export class DraftsController {
       request.log.error(error);
       const message = error instanceof Error ? error.message : 'Failed to set auto-draft preferences';
       return reply.code(400).send({ error: message });
+    }
+  };
+
+  /**
+   * Commissioner override: Reassign a draft pick to a different driver
+   * PATCH /api/v1/drafts/:draftId/picks/:pickId/override
+   */
+  commissionerOverridePick = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { draftId, pickId } = request.params as { draftId: string; pickId: string };
+      const { newDriverId } = request.body as CommissionerOverrideInput;
+      
+      const userId = (request as any).user?.userId;
+      
+      if (!userId) {
+        return reply.code(401).send({ error: 'Not authenticated' });
+      }
+
+      if (!newDriverId) {
+        return reply.code(400).send({ error: 'newDriverId is required' });
+      }
+
+      const result = await this.draftsService.commissionerOverridePick(
+        draftId,
+        pickId,
+        newDriverId,
+        userId
+      );
+
+      if (!result.success) {
+        return reply.code(400).send({ error: result.error });
+      }
+
+      return reply.send(result.pick);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({ error: 'Failed to override pick' });
+    }
+  };
+
+  /**
+   * Commissioner override: Assign a driver to a member who missed a pick
+   * POST /api/v1/drafts/:draftId/assign-pick
+   */
+  commissionerAssignPick = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { draftId } = request.params as { draftId: string };
+      const { leagueMemberId, round, driverId } = request.body as CommissionerAssignPickInput;
+      
+      const userId = (request as any).user?.userId;
+      
+      if (!userId) {
+        return reply.code(401).send({ error: 'Not authenticated' });
+      }
+
+      if (!leagueMemberId || !round || !driverId) {
+        return reply.code(400).send({ error: 'leagueMemberId, round, and driverId are required' });
+      }
+
+      const result = await this.draftsService.commissionerAssignMissedPick(
+        draftId,
+        leagueMemberId,
+        round,
+        driverId,
+        userId
+      );
+
+      if (!result.success) {
+        return reply.code(400).send({ error: result.error });
+      }
+
+      return reply.send(result.pick);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({ error: 'Failed to assign pick' });
+    }
+  };
+
+  // ========== DRIVER SUBSTITUTION HANDLERS (US-014) ==========
+
+  /**
+   * Process a driver substitution (admin/system)
+   * POST /api/v1/admin/substitutions/:substitutionId/process
+   */
+  processDriverSubstitution = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { substitutionId } = request.params as { substitutionId: string };
+      const result = await this.draftsService.processDriverSubstitution(substitutionId);
+
+      if (!result.success) {
+        return reply.code(400).send({ error: result.error });
+      }
+
+      return reply.send({ 
+        success: true, 
+        affectedPicks: result.impacts?.length || 0,
+        impacts: result.impacts 
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({ error: 'Failed to process substitution' });
+    }
+  };
+
+  /**
+   * Get active redraft windows for the current user
+   * GET /api/v1/users/me/redraft-windows
+   */
+  getActiveRedraftWindows = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const userId = (request as any).user?.userId;
+      
+      if (!userId) {
+        return reply.code(401).send({ error: 'Not authenticated' });
+      }
+
+      const windows = await this.draftsService.getActiveRedraftWindows(userId);
+      return reply.send({ windows });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({ error: 'Failed to get redraft windows' });
+    }
+  };
+
+  /**
+   * Submit a redraft pick (player selects new driver after substitution)
+   * POST /api/v1/substitutions/:substitutionId/redraft
+   */
+  submitRedraftPick = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { substitutionId } = request.params as { substitutionId: string };
+      const { leagueMemberId, newDriverId } = request.body as SubmitRedraftInput;
+      
+      const userId = (request as any).user?.userId;
+      
+      if (!userId) {
+        return reply.code(401).send({ error: 'Not authenticated' });
+      }
+
+      if (!leagueMemberId || !newDriverId) {
+        return reply.code(400).send({ error: 'leagueMemberId and newDriverId are required' });
+      }
+
+      const result = await this.draftsService.submitRedraftPick(
+        substitutionId,
+        leagueMemberId,
+        newDriverId,
+        userId
+      );
+
+      if (!result.success) {
+        return reply.code(400).send({ error: result.error });
+      }
+
+      return reply.send({ success: true });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({ error: 'Failed to submit redraft' });
+    }
+  };
+
+  /**
+   * Get substitution impact for a draft window
+   * GET /api/v1/drafts/:draftId/substitutions/:substitutionId/impact
+   */
+  getSubstitutionImpact = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { draftId, substitutionId } = request.params as { 
+        draftId: string; 
+        substitutionId: string; 
+      };
+
+      const result = await this.draftsService.getSubstitutionImpactForDraft(draftId, substitutionId);
+      return reply.send(result);
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({ error: 'Failed to get substitution impact' });
     }
   };
 }

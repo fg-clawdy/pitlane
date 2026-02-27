@@ -345,9 +345,9 @@
       ],
       "dependencies": ["US-001", "US-002"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Transactional emails cannot be disabled",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-25. Already implemented in users module with UpdateProfileDto (username, displayName, defaultTeamName, emailEnabled, pushEnabled), ChangePasswordDto with current password verification, and email change flow with hold period.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E profile update passes"]
     },
     {
@@ -367,9 +367,9 @@
       ],
       "dependencies": ["US-001", "US-002", "US-003"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Hold period admin-configurable, default 24h (86400 seconds)",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-25. Implemented in users module with requestEmailChange, cancelEmailChange, waiveHoldEmailChange, verifyEmailChange. Hold period from SystemSetting (email_change_hold_seconds, default 24h), expiry 72h.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E email change flow passes"]
     },
     {
@@ -426,9 +426,9 @@
       ],
       "dependencies": ["US-005", "US-006"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Super admin role required",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-25. Implemented overrideRaceResult, createDriverSubstitution, resolveDiscrepancy, getAdminOverrideData, listRaceOverrides in F1DataService. Admin endpoints: PATCH /admin/race-results/:resultId/override, POST /admin/races/:raceId/substitutions, GET /admin/race-results/:resultId, GET /admin/races/:raceId/overrides, PATCH /admin/discrepancies/:discrepancyId/resolve. Score recalculation triggered after override, commissioners notified, audit logs created.",
       "testGates": ["TypeScript compiles", "Unit tests pass", "E2E admin override passes"]
     },
     {
@@ -488,9 +488,9 @@
       ],
       "dependencies": ["US-008", "US-009"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Cannot modify historical race scores or picks directly",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-26. League settings via PATCH /leagues/:id (commissioner only, locked after first draft). Join request approval via PATCH /leagues/:id/join-requests/:requestId. Invite links via POST /leagues/:id/invite-links. Member removal via DELETE /leagues/:id/members/:memberId. Draft pick override via PATCH /drafts/:draftId/picks/:pickId/override and POST /drafts/:draftId/assign-pick. Flag issues via POST /leagues/:id/flag.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -549,9 +549,9 @@
       ],
       "dependencies": ["US-011", "US-012"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Players do not need to rank all 22 drivers",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-26. Implemented in drafts.service.ts: getAutoDraftPreferences(), setAutoDraftPreferences(), getNextAutoDraftDriver(). Routes: GET/PUT /users/me/auto-draft-preferences. AutoDraftPreference model stores userId, driverId, rank.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -589,9 +589,9 @@
       ],
       "dependencies": ["US-011", "US-012"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Missed pick resolution commissioner-configurable per league",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-26. ResolutionMethod type includes 'random', 'top_points', 'no_pick'. resolveMissedPick() in drafts.service.ts handles all three cases. League.missedPickResolution field stores the configured method. Admin endpoint POST /admin/drafts/:draftId/resolve-missed/:leagueMemberId for manual triggering.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -616,12 +616,12 @@
     },
     {
       "id": "US-017",
-      "title": "Scoring Engine - Linear 20-Point",
+      "title": "Scoring Engine - Linear 20",
       "epic": "EPIC-005 — Scoring Engine",
       "description": "Calculate scores using linear 20-point system.",
       "acceptanceCriteria": [
-        "1st place = 20 points",
-        "Each position after 1st earns 1 fewer point (20th = 1)",
+        "1st place = 20 points, each subsequent position earns 1 fewer point",
+        "Positions 11-20 earn 10-1 points respectively",
         "DNF, DNS, DSQ all score 0",
         "Player race score = Driver 1 score + Driver 2 score"
       ],
@@ -629,7 +629,7 @@
       "priority": 1,
       "status": "done",
       "passes": true,
-      "notes": "Implemented together with US-016. LINEAR_20_SCORING_TABLE in types.ts.",
+      "notes": "Completed 2026-02-26. LINEAR_20_SCORING_TABLE defined in types.ts with positions 1-20 scoring 20-1 points. SCORING_CONFIGS.linear_20 configured with no fastest lap bonus. calculateDriverScore() in scoring.service.ts handles all three scoring types (fia_official, linear_20, proprietary).",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -1146,9 +1146,9 @@
       ],
       "dependencies": ["US-011", "US-012", "US-013"],
       "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "API IDs: API-050 through API-054",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-26. All endpoints implemented in drafts.routes.ts with rate limiting. Additional endpoints: GET /drafts/:draftId, GET /drafts/:draftId/state, PATCH /drafts/:draftId/picks/:pickId/override, POST /drafts/:draftId/assign-pick, WebSocket at /ws/leagues/:id/draft.",
       "testGates": ["TypeScript compiles", "Integration tests pass"]
     },
     {
@@ -1238,24 +1238,6 @@
       "status": "done",
       "passes": true,
       "notes": "Completed 2026-02-25. Draft worker handles all four job types: window.open, window.close, pick.timeout, auto_pick. Scheduler schedules window.open jobs for upcoming races on Monday 00:00 UTC of race week.",
-      "testGates": ["TypeScript compiles", "Unit tests pass"]
-    },
-    {
-      "id": "US-049",
-      "title": "Background Jobs - Scoring & Notifications",
-      "epic": "EPIC-011 — Background Jobs",
-      "description": "Scoring calculation and notification delivery jobs.",
-      "acceptanceCriteria": [
-        "scoring.calculate: after jolpica.sync.results success, retry 3x",
-        "notification.send_push: on notification create, retry 5x",
-        "notification.send_email: on notification create, retry 5x",
-        "email_change.apply: at email_change_expires_at"
-      ],
-      "dependencies": ["US-016", "US-017", "US-018", "US-023", "US-024", "US-004"],
-      "priority": 1,
-      "status": "pending",
-      "passes": false,
-      "notes": "Queues: scoring, notifications, users",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     }
   ],

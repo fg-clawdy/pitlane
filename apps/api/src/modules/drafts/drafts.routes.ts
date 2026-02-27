@@ -99,6 +99,54 @@ async function setAutoDraftPreferencesHandler(request: FastifyRequest, reply: Fa
 }
 
 /**
+ * PATCH /api/v1/drafts/:draftId/picks/:pickId/override
+ * Commissioner override a draft pick
+ */
+async function commissionerOverridePickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.commissionerOverridePick(request, reply);
+}
+
+/**
+ * POST /api/v1/drafts/:draftId/assign-pick
+ * Commissioner assign a pick to member who missed
+ */
+async function commissionerAssignPickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.commissionerAssignPick(request, reply);
+}
+
+/**
+ * POST /api/v1/admin/substitutions/:substitutionId/process
+ * Process a driver substitution
+ */
+async function processDriverSubstitutionHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.processDriverSubstitution(request, reply);
+}
+
+/**
+ * GET /api/v1/users/me/redraft-windows
+ * Get active redraft windows for current user
+ */
+async function getActiveRedraftWindowsHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.getActiveRedraftWindows(request, reply);
+}
+
+/**
+ * POST /api/v1/substitutions/:substitutionId/redraft
+ * Submit a redraft pick
+ */
+async function submitRedraftPickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.submitRedraftPick(request, reply);
+}
+
+/**
+ * GET /api/v1/drafts/:draftId/substitutions/:substitutionId/impact
+ * Get substitution impact for a draft window
+ */
+async function getSubstitutionImpactHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.getSubstitutionImpact(request, reply);
+}
+
+/**
  * Register draft routes
  */
 export async function draftsRoutes(fastify: FastifyInstance): Promise<void> {
@@ -182,11 +230,74 @@ export async function draftsRoutes(fastify: FastifyInstance): Promise<void> {
     },
   }, setAutoDraftPreferencesHandler);
 
+  // Commissioner override endpoints (commissioner only)
+  fastify.patch('/drafts/:draftId/picks/:pickId/override', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, commissionerOverridePickHandler);
+
+  fastify.post('/drafts/:draftId/assign-pick', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, commissionerAssignPickHandler);
+
   // Admin endpoints for draft management
   fastify.post('/admin/drafts/open-scheduled', openScheduledDraftWindowsHandler);
   fastify.post('/admin/drafts/close-expired', closeExpiredDraftWindowsHandler);
   fastify.post('/admin/drafts/create-for-race/:raceId', createDraftWindowsForRaceHandler);
   fastify.post('/admin/drafts/:draftId/resolve-missed/:leagueMemberId', resolveMissedPickHandler);
+
+  // Driver substitution endpoints (US-014)
+  // Admin: Process a driver substitution after confirmation
+  fastify.post('/admin/substitutions/:substitutionId/process', processDriverSubstitutionHandler);
+
+  // User: Get active redraft windows
+  fastify.get('/users/me/redraft-windows', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, getActiveRedraftWindowsHandler);
+
+  // User: Submit a redraft pick (after driver substitution)
+  fastify.post('/substitutions/:substitutionId/redraft', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, submitRedraftPickHandler);
+
+  // User: Get substitution impact for a draft window
+  fastify.get('/drafts/:draftId/substitutions/:substitutionId/impact', {
+    preHandler: authenticate,
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
+      },
+    },
+  }, getSubstitutionImpactHandler);
 }
 
 /**

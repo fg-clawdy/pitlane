@@ -10,6 +10,27 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const f1dataService = new F1DataService(prisma);
 
+// DTOs for admin data override
+interface OverrideRaceResultBody {
+  field: string;
+  adminValue: any;
+  adminProtected?: boolean;
+}
+
+interface DriverSubstitutionBody {
+  originalDriverId: string;
+  replacementDriverId: string | null;
+  reason: string;
+}
+
+interface ResolveDiscrepancyParams {
+  discrepancyId: string;
+}
+
+interface ResolveDiscrepancyBody {
+  resolution: 'accepted' | 'rejected';
+}
+
 /**
  * Get all seasons
  * GET /api/v1/seasons
@@ -242,6 +263,218 @@ export async function syncRaceResults(
     return reply.code(500).send({
       success: false,
       message: 'Failed to sync race results'
+    });
+  }
+}
+
+// ========== ADMIN DATA OVERRIDE ENDPOINTS ==========
+
+/**
+ * Override a race result field
+ * PATCH /api/v1/admin/race-results/:resultId/override
+ */
+export async function overrideRaceResult(
+  request: FastifyRequest<{ Params: { resultId: string }; Body: OverrideRaceResultBody }>,
+  reply: FastifyReply
+) {
+  try {
+    const { resultId } = request.params;
+    const { field, adminValue, adminProtected = false } = request.body;
+
+    // Validate field
+    const allowedFields = ['position', 'points', 'status', 'time', 'fastestLap'];
+    if (!allowedFields.includes(field)) {
+      return reply.code(400).send({
+        success: false,
+        message: `Invalid field. Allowed fields: ${allowedFields.join(', ')}`
+      });
+    }
+
+    // Get user ID from request (would come from auth)
+    const adminUserId = (request as any).user?.id || 'system';
+
+    const result = await f1dataService.overrideRaceResult(
+      resultId,
+      field,
+      adminValue,
+      adminProtected,
+      adminUserId
+    );
+
+    if (!result.success) {
+      return reply.code(400).send({
+        success: false,
+        message: result.error
+      });
+    }
+
+    return reply.send({
+      success: true,
+      message: `Successfully overridden ${field} for race result`
+    });
+  } catch (error) {
+    console.error('Error overriding race result:', error);
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to override race result'
+    });
+  }
+}
+
+/**
+ * Create driver substitution
+ * POST /api/v1/admin/races/:raceId/substitutions
+ */
+export async function createDriverSubstitution(
+  request: FastifyRequest<{ Params: { raceId: string }; Body: DriverSubstitutionBody }>,
+  reply: FastifyReply
+) {
+  try {
+    const { raceId } = request.params;
+    const { originalDriverId, replacementDriverId, reason } = request.body;
+
+    if (!originalDriverId || !reason) {
+      return reply.code(400).send({
+        success: false,
+        message: 'originalDriverId and reason are required'
+      });
+    }
+
+    // Get user ID from request (would come from auth)
+    const adminUserId = (request as any).user?.id || 'system';
+
+    const result = await f1dataService.createDriverSubstitution(
+      raceId,
+      originalDriverId,
+      replacementDriverId,
+      reason,
+      adminUserId
+    );
+
+    if (!result.success) {
+      return reply.code(400).send({
+        success: false,
+        message: result.error
+      });
+    }
+
+    return reply.send({
+      success: true,
+      data: { substitutionId: result.substitutionId },
+      message: 'Driver substitution created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating driver substitution:', error);
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to create driver substitution'
+    });
+  }
+}
+
+/**
+ * Get admin override data for a race result
+ * GET /api/v1/admin/race-results/:resultId
+ */
+export async function getAdminOverrideData(
+  request: FastifyRequest<{ Params: { resultId: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const { resultId } = request.params;
+
+    const data = await f1dataService.getAdminOverrideData(resultId);
+
+    if (!data) {
+      return reply.code(404).send({
+        success: false,
+        message: 'Race result not found'
+      });
+    }
+
+    return reply.send({
+      success: true,
+      data
+    });
+  } catch (error) {
+    console.error('Error fetching admin override data:', error);
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to fetch admin override data'
+    });
+  }
+}
+
+/**
+ * List all admin overrides for a race
+ * GET /api/v1/admin/races/:raceId/overrides
+ */
+export async function listRaceOverrides(
+  request: FastifyRequest<{ Params: { raceId: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const { raceId } = request.params;
+
+    const overrides = await f1dataService.listRaceOverrides(raceId);
+
+    return reply.send({
+      success: true,
+      data: overrides
+    });
+  } catch (error) {
+    console.error('Error listing race overrides:', error);
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to list race overrides'
+    });
+  }
+}
+
+/**
+ * Resolve a data discrepancy
+ * PATCH /api/v1/admin/discrepancies/:discrepancyId/resolve
+ */
+export async function resolveDiscrepancy(
+  request: FastifyRequest<{ Params: ResolveDiscrepancyParams; Body: ResolveDiscrepancyBody }>,
+  reply: FastifyReply
+) {
+  try {
+    const { discrepancyId } = request.params;
+    const { resolution } = request.body;
+
+    if (!resolution || !['accepted', 'rejected'].includes(resolution)) {
+      return reply.code(400).send({
+        success: false,
+        message: 'resolution must be "accepted" or "rejected"'
+      });
+    }
+
+    // Get user ID from request (would come from auth)
+    const adminUserId = (request as any).user?.id || 'system';
+
+    const result = await f1dataService.resolveDiscrepancy(
+      discrepancyId,
+      resolution,
+      adminUserId
+    );
+
+    if (!result.success) {
+      return reply.code(400).send({
+        success: false,
+        message: result.error
+      });
+    }
+
+    return reply.send({
+      success: true,
+      message: `Discrepancy ${resolution}`
+    });
+  } catch (error) {
+    console.error('Error resolving discrepancy:', error);
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to resolve discrepancy'
     });
   }
 }

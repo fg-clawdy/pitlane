@@ -20,6 +20,9 @@ import {
   calculateDraftOpenTime,
   calculateDraftCloseTime,
   DEFAULT_DRAFT_PICK_TIMEOUT_HOURS,
+  SubstitutionPolicy,
+  SubstitutionImpact,
+  RedraftWindow,
 } from './types';
 
 export class DraftsService {
@@ -978,6 +981,242 @@ export class DraftsService {
   }
 
   /**
+   * Commissioner override: Reassign a draft pick to a different driver
+   * Used for edge cases where commissioner needs to correct a pick
+   */
+  async commissionerOverridePick(
+    draftWindowId: string,
+    pickId: string,
+    newDriverId: string,
+    commissionerUserId: string
+  ): Promise<{ success: boolean; error?: string; pick?: any }> {
+    try {
+      // Get draft window with league
+      const window = await this.prisma.draftWindow.findUnique({
+        where: { id: draftWindowId },
+        include: {
+          league: {
+            include: {
+              members: {
+                where: { leftAt: null },
+                orderBy: { joinedAt: 'asc' },
+              },
+            },
+          },
+        },
+      });
+
+      if (!window) {
+        return { success: false, error: 'Draft window not found' };
+      }
+
+      // Verify user is commissioner (first member)
+      const commissioner = window.league.members[0];
+      if (!commissioner || commissioner.userId !== commissionerUserId) {
+        return { success: false, error: 'Only the commissioner can override picks' };
+      }
+
+      // Get the pick to override
+      const pick = await this.prisma.draftPick.findUnique({
+        where: { id: pickId },
+        include: { driver: true, leagueMember: true },
+      });
+
+      if (!pick || pick.draftWindowId !== draftWindowId) {
+        return { success: false, error: 'Pick not found in this draft window' };
+      }
+
+      // Verify new driver exists and is available
+      const newDriver = await this.prisma.driver.findUnique({
+        where: { id: newDriverId },
+      });
+
+      if (!newDriver) {
+        return { success: false, error: 'Driver not found' };
+      }
+
+      // Check if new driver was already picked by someone else
+      const existingPick = await this.prisma.draftPick.findFirst({
+        where: {
+          draftWindowId,
+          driverId: newDriverId,
+          id: { not: pickId }, // Exclude the current pick being modified
+        },
+      });
+
+      if (existingPick) {
+        return { success: false, error: 'Driver already picked by another member' };
+      }
+
+      // Store old driver for audit
+      const oldDriverId = pick.driverId;
+      const oldDriverCode = pick.driver?.code;
+
+      // Update the pick
+      const updatedPick = await this.prisma.draftPick.update({
+        where: { id: pickId },
+        data: {
+          driverId: newDriverId,
+          resolutionMethod: 'commissioner_override',
+        },
+        include: {
+          driver: true,
+          leagueMember: true,
+        },
+      });
+
+      // Create audit log
+      await this.prisma.auditLog.create({
+        data: {
+          action: 'draft_pick_override',
+          entityType: 'DraftPick',
+          entityId: pickId,
+          userId: commissionerUserId,
+          changes: { 
+            oldValue: { driverId: oldDriverId, driverCode: oldDriverCode }, 
+            newValue: { driverId: newDriverId, driverCode: newDriver.code } 
+          },
+        },
+      });
+
+      // Broadcast update to league
+      this.broadcastToLeague(window.leagueId, {
+        type: 'pick_override',
+        payload: {
+          pickId,
+          leagueMemberId: pick.leagueMemberId,
+          teamName: pick.leagueMember?.teamName || '',
+          oldDriverCode: oldDriverCode,
+          newDriverCode: newDriver.code,
+          newDriverName: `${newDriver.givenName} ${newDriver.familyName}`,
+          round: pick.round,
+        },
+        timestamp: new Date(),
+      });
+
+      console.log(`[DraftsService] Commissioner override: pick ${pickId} changed from driver ${oldDriverId} to ${newDriverId}`);
+
+      return { success: true, pick: updatedPick };
+    } catch (error) {
+      console.error('[DraftsService] Error overriding pick:', error);
+      return { success: false, error: `Failed to override pick: ${error}` };
+    }
+  }
+
+  /**
+   * Commissioner override: Reassign a missed pick (no driver) to a driver
+   * Used when player had no_pick resolution but commissioner wants to assign a driver
+   */
+  async commissionerAssignMissedPick(
+    draftWindowId: string,
+    leagueMemberId: string,
+    round: number,
+    driverId: string,
+    commissionerUserId: string
+  ): Promise<{ success: boolean; error?: string; pick?: any }> {
+    try {
+      // Get draft window with league
+      const window = await this.prisma.draftWindow.findUnique({
+        where: { id: draftWindowId },
+        include: {
+          league: {
+            include: {
+              members: {
+                where: { leftAt: null },
+                orderBy: { joinedAt: 'asc' },
+              },
+            },
+          },
+        },
+      });
+
+      if (!window) {
+        return { success: false, error: 'Draft window not found' };
+      }
+
+      // Verify user is commissioner
+      const commissioner = window.league.members[0];
+      if (!commissioner || commissioner.userId !== commissionerUserId) {
+        return { success: false, error: 'Only the commissioner can assign missed picks' };
+      }
+
+      // Check if member already has a pick in this round
+      const existingPick = await this.prisma.draftPick.findFirst({
+        where: {
+          draftWindowId,
+          leagueMemberId,
+          round,
+        },
+      });
+
+      if (existingPick) {
+        // Use the override method instead
+        return this.commissionerOverridePick(draftWindowId, existingPick.id, driverId, commissionerUserId);
+      }
+
+      // Verify driver is available
+      const driver = await this.prisma.driver.findUnique({
+        where: { id: driverId },
+      });
+
+      if (!driver) {
+        return { success: false, error: 'Driver not found' };
+      }
+
+      const pickedDriver = await this.prisma.draftPick.findFirst({
+        where: { draftWindowId, driverId },
+      });
+
+      if (pickedDriver) {
+        return { success: false, error: 'Driver already picked by another member' };
+      }
+
+      // Get draft order for pick order
+      const draftOrder = await this.getDraftOrder(draftWindowId);
+      const memberOrder = draftOrder.find(o => o.leagueMemberId === leagueMemberId);
+      const pickOrder = round === 1 ? memberOrder?.round1PickOrder : memberOrder?.round2PickOrder;
+
+      // Create the pick
+      const pick = await this.prisma.draftPick.create({
+        data: {
+          draftWindowId,
+          leagueMemberId,
+          driverId,
+          round,
+          pickOrder: pickOrder || 0,
+          resolutionMethod: 'commissioner_override',
+          submittedAt: new Date(),
+        },
+        include: {
+          driver: true,
+          leagueMember: true,
+        },
+      });
+
+      // Create audit log
+      await this.prisma.auditLog.create({
+        data: {
+          action: 'draft_pick_assigned',
+          entityType: 'DraftPick',
+          entityId: pick.id,
+          userId: commissionerUserId,
+          changes: { 
+            oldValue: { hadNoPick: true }, 
+            newValue: { driverId, driverCode: driver.code } 
+          },
+        },
+      });
+
+      console.log(`[DraftsService] Commissioner assigned driver ${driverId} to member ${leagueMemberId} for round ${round}`);
+
+      return { success: true, pick };
+    } catch (error) {
+      console.error('[DraftsService] Error assigning missed pick:', error);
+      return { success: false, error: `Failed to assign missed pick: ${error}` };
+    }
+  }
+
+  /**
    * Get the next preferred driver for auto-draft
    * Returns the highest-ranked available driver
    */
@@ -1007,6 +1246,516 @@ export class DraftsService {
     }
 
     return null; // All preferred drivers are taken
+  }
+
+  // ========== DRIVER SUBSTITUTION METHODS (US-014) ==========
+
+  /**
+   * Process a confirmed driver substitution after draft lock
+   * Handles both auto_replace and redraft policies
+   * @param substitutionId - The ID of the DriverSubstitution record
+   */
+  async processDriverSubstitution(substitutionId: string): Promise<{ success: boolean; error?: string; impacts?: SubstitutionImpact[] }> {
+    try {
+      // Get the substitution record
+      const substitution = await this.prisma.driverSubstitution.findUnique({
+        where: { id: substitutionId },
+      });
+
+      if (!substitution) {
+        return { success: false, error: 'Substitution not found' };
+      }
+
+      if (!substitution.confirmedAt) {
+        return { success: false, error: 'Substitution not yet confirmed by admin' };
+      }
+
+      // Find all draft windows for this race
+      const draftWindows = await this.prisma.draftWindow.findMany({
+        where: { raceId: substitution.raceId },
+        include: {
+          league: true,
+          picks: {
+            where: { driverId: substitution.originalDriverId },
+            include: {
+              driver: true,
+              leagueMember: true,
+            },
+          },
+        },
+      });
+
+      const impacts: SubstitutionImpact[] = [];
+
+      for (const window of draftWindows) {
+        // Check if draft window is locked (closed or completed)
+        const isLocked = window.status === 'closed' || window.status === 'completed';
+        const isOpen = window.status === 'open';
+
+        for (const pick of window.picks) {
+          const policy = window.league.substitutionPolicy as SubstitutionPolicy;
+          
+          if (isOpen) {
+            // BEFORE draft closes: replacement added to pool, original unavailable
+            // The original driver is already picked, so we just need to handle
+            // if there's a replacement - add them to the available pool
+            if (substitution.replacementDriverId) {
+              // The replacement driver is now available for future picks
+              // No action needed on existing picks - they stay valid
+              console.log(`[DraftsService] Substitution before draft close - replacement ${substitution.replacementDriverId} available`);
+            }
+          } else if (isLocked) {
+            // AFTER draft closes: handle based on league policy
+            const impact: SubstitutionImpact = {
+              draftWindowId: window.id,
+              leagueId: window.leagueId,
+              leagueMemberId: pick.leagueMemberId,
+              teamName: pick.leagueMember?.teamName || '',
+              userId: pick.leagueMember?.userId || '',
+              affectedPickId: pick.id,
+              round: pick.round,
+              originalDriverId: substitution.originalDriverId,
+              originalDriverCode: pick.driver?.code || '',
+              substitutionId: substitution.id,
+            };
+
+            switch (policy) {
+              case 'auto_replace':
+                // Automatically assign replacement driver
+                if (substitution.replacementDriverId) {
+                  await this.autoReplaceDriver(pick.id, substitution.replacementDriverId, substitutionId);
+                  impact.replacementDriverId = substitution.replacementDriverId;
+                } else {
+                  // No replacement (DNS) - player scores 0 for that slot
+                  await this.markPickAsDNS(pick.id, substitutionId);
+                }
+                break;
+
+              case 'redraft':
+                // Give player 24h window to pick a new driver
+                await this.createRedraftWindow(window.id, pick.leagueMemberId, substitution);
+                break;
+
+              case 'none':
+                // No action - player keeps original driver (scores 0 if DNS)
+                console.log(`[DraftsService] League ${window.leagueId} has no substitution policy - no action taken`);
+                break;
+            }
+
+            impacts.push(impact);
+
+            // Notify affected player
+            await this.notifyPlayerOfSubstitution(
+              pick.leagueMember?.userId || '',
+              window.leagueId,
+              substitution,
+              policy
+            );
+          }
+        }
+      }
+
+      // Create audit log
+      await this.prisma.auditLog.create({
+        data: {
+          action: 'driver_substitution_processed',
+          entityType: 'DriverSubstitution',
+          entityId: substitutionId,
+          changes: {
+            raceId: substitution.raceId,
+            originalDriverId: substitution.originalDriverId,
+            replacementDriverId: substitution.replacementDriverId,
+            affectedLeagues: impacts.length,
+            impacts: impacts.map(i => ({ leagueId: i.leagueId, teamName: i.teamName })),
+          },
+        },
+      });
+
+      console.log(`[DraftsService] Processed substitution ${substitutionId}, affected ${impacts.length} picks`);
+
+      return { success: true, impacts };
+    } catch (error) {
+      console.error('[DraftsService] Error processing substitution:', error);
+      return { success: false, error: `Failed to process substitution: ${error}` };
+    }
+  }
+
+  /**
+   * Auto-replace a driver in a pick
+   */
+  private async autoReplaceDriver(pickId: string, replacementDriverId: string, substitutionId: string): Promise<void> {
+    await this.prisma.draftPick.update({
+      where: { id: pickId },
+      data: {
+        driverId: replacementDriverId,
+        resolutionMethod: 'admin_substitution',
+      },
+    });
+
+    console.log(`[DraftsService] Auto-replaced driver in pick ${pickId} with ${replacementDriverId}`);
+  }
+
+  /**
+   * Mark a pick as DNS (no driver, will score 0)
+   */
+  private async markPickAsDNS(pickId: string, substitutionId: string): Promise<void> {
+    // We keep the pick but note that the driver is DNS
+    // The scoring engine will handle scoring 0 for DNS drivers
+    await this.prisma.draftPick.update({
+      where: { id: pickId },
+      data: {
+        resolutionMethod: 'admin_substitution',
+      },
+    });
+
+    console.log(`[DraftsService] Marked pick ${pickId} as DNS - player will score 0`);
+  }
+
+  /**
+   * Create a redraft window for a player
+   * Gives them 24h to select a new driver
+   */
+  private async createRedraftWindow(
+    draftWindowId: string,
+    leagueMemberId: string,
+    substitution: any
+  ): Promise<void> {
+    // Calculate expiry (24 hours from now)
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    // Store redraft window info in audit log (we'll query this for active redrafts)
+    await this.prisma.auditLog.create({
+      data: {
+        action: 'redraft_window_created',
+        entityType: 'DraftPick',
+        entityId: `${draftWindowId}:${leagueMemberId}`,
+        changes: {
+          draftWindowId,
+          leagueMemberId,
+          originalDriverId: substitution.originalDriverId,
+          replacementDriverId: substitution.replacementDriverId,
+          substitutionId: substitution.id,
+          redraftExpiresAt: expiresAt.toISOString(),
+        },
+      },
+    });
+
+    console.log(`[DraftsService] Created redraft window for member ${leagueMemberId}, expires ${expiresAt}`);
+  }
+
+  /**
+   * Get active redraft windows for a user
+   */
+  async getActiveRedraftWindows(userId: string): Promise<RedraftWindow[]> {
+    // Find league memberships for this user
+    const memberships = await this.prisma.leagueMember.findMany({
+      where: { userId, leftAt: null },
+      select: { id: true },
+    });
+    const memberIds = memberships.map(m => m.id);
+
+    // Find active redraft windows from audit logs
+    const redraftLogs = await this.prisma.auditLog.findMany({
+      where: {
+        action: 'redraft_window_created',
+        entityType: 'DraftPick',
+      },
+    });
+
+    const now = new Date();
+    const activeRedrafts: RedraftWindow[] = [];
+
+    for (const log of redraftLogs) {
+      const changes = log.changes as any;
+      
+      // Check if this redraft is for this user and still active
+      if (!memberIds.includes(changes.leagueMemberId)) continue;
+      
+      const expiresAt = new Date(changes.redraftExpiresAt);
+      if (expiresAt < now) continue;
+
+      // Get available drivers (not already picked in this draft)
+      const existingPicks = await this.prisma.draftPick.findMany({
+        where: { draftWindowId: changes.draftWindowId },
+        select: { driverId: true },
+      });
+      const pickedDriverIds = new Set(existingPicks.map(p => p.driverId));
+
+      // Get the draft window to find the season
+      const draftWindow = await this.prisma.draftWindow.findUnique({
+        where: { id: changes.draftWindowId },
+        include: { race: { include: { season: true } } },
+      });
+
+      if (!draftWindow) continue;
+
+      // Get available drivers
+      const allDrivers = await this.prisma.driver.findMany({
+        where: { seasonId: draftWindow.race.seasonId },
+      });
+
+      const availableDrivers = allDrivers
+        .filter(d => !pickedDriverIds.has(d.id) || d.id === changes.replacementDriverId)
+        .map(d => ({
+          id: d.id,
+          code: d.code,
+          name: `${d.givenName} ${d.familyName}`,
+        }));
+
+      activeRedrafts.push({
+        leagueMemberId: changes.leagueMemberId,
+        draftWindowId: changes.draftWindowId,
+        originalDriverId: changes.originalDriverId,
+        replacementDriverId: changes.replacementDriverId,
+        redraftExpiresAt: expiresAt,
+        availableDrivers,
+      });
+    }
+
+    return activeRedrafts;
+  }
+
+  /**
+   * Submit a redraft pick
+   * Player selects a new driver after their original driver was substituted
+   */
+  async submitRedraftPick(
+    substitutionId: string,
+    leagueMemberId: string,
+    newDriverId: string,
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Verify the league member belongs to this user
+      const member = await this.prisma.leagueMember.findUnique({
+        where: { id: leagueMemberId },
+      });
+
+      if (!member || member.userId !== userId) {
+        return { success: false, error: 'Invalid league member' };
+      }
+
+      // Find the redraft window from audit logs
+      const redraftLog = await this.prisma.auditLog.findFirst({
+        where: {
+          action: 'redraft_window_created',
+          entityType: 'DraftPick',
+          changes: {
+            path: ['substitutionId'],
+            equals: substitutionId,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!redraftLog) {
+        return { success: false, error: 'Redraft window not found' };
+      }
+
+      const changes = redraftLog.changes as any;
+
+      // Verify this is the correct member
+      if (changes.leagueMemberId !== leagueMemberId) {
+        return { success: false, error: 'This redraft window is not for you' };
+      }
+
+      // Check if redraft window has expired
+      const expiresAt = new Date(changes.redraftExpiresAt);
+      if (expiresAt < new Date()) {
+        return { success: false, error: 'Redraft window has expired' };
+      }
+
+      // Verify the driver is available
+      const existingPick = await this.prisma.draftPick.findFirst({
+        where: {
+          draftWindowId: changes.draftWindowId,
+          driverId: newDriverId,
+        },
+      });
+
+      if (existingPick) {
+        return { success: false, error: 'Driver already picked by another member' };
+      }
+
+      // Find the original pick
+      const originalPick = await this.prisma.draftPick.findFirst({
+        where: {
+          draftWindowId: changes.draftWindowId,
+          leagueMemberId,
+          driverId: changes.originalDriverId,
+        },
+      });
+
+      if (!originalPick) {
+        return { success: false, error: 'Original pick not found' };
+      }
+
+      // Update the pick
+      await this.prisma.draftPick.update({
+        where: { id: originalPick.id },
+        data: {
+          driverId: newDriverId,
+          resolutionMethod: 'driver_redraft',
+        },
+      });
+
+      // Mark the redraft as completed
+      await this.prisma.auditLog.create({
+        data: {
+          action: 'redraft_completed',
+          entityType: 'DraftPick',
+          entityId: originalPick.id,
+          userId,
+          changes: {
+            substitutionId,
+            originalDriverId: changes.originalDriverId,
+            newDriverId,
+          },
+        },
+      });
+
+      // Broadcast update to league
+      const draftWindow = await this.prisma.draftWindow.findUnique({
+        where: { id: changes.draftWindowId },
+      });
+      
+      if (draftWindow) {
+        const newDriver = await this.prisma.driver.findUnique({
+          where: { id: newDriverId },
+        });
+
+        this.broadcastToLeague(draftWindow.leagueId, {
+          type: 'driver_redraft',
+          payload: {
+            leagueMemberId,
+            teamName: member.teamName,
+            oldDriverId: changes.originalDriverId,
+            newDriverId,
+            newDriverCode: newDriver?.code,
+            newDriverName: newDriver ? `${newDriver.givenName} ${newDriver.familyName}` : '',
+          },
+          timestamp: new Date(),
+        });
+      }
+
+      console.log(`[DraftsService] Redraft completed: member ${leagueMemberId} selected driver ${newDriverId}`);
+
+      return { success: true };
+    } catch (error) {
+      console.error('[DraftsService] Error submitting redraft:', error);
+      return { success: false, error: `Failed to submit redraft: ${error}` };
+    }
+  }
+
+  /**
+   * Notify a player of a driver substitution affecting their pick
+   */
+  private async notifyPlayerOfSubstitution(
+    userId: string,
+    leagueId: string,
+    substitution: any,
+    policy: SubstitutionPolicy
+  ): Promise<void> {
+    try {
+      // Get driver details
+      const originalDriver = await this.prisma.driver.findUnique({
+        where: { id: substitution.originalDriverId },
+      });
+
+      let replacementDriver = null;
+      if (substitution.replacementDriverId) {
+        replacementDriver = await this.prisma.driver.findUnique({
+          where: { id: substitution.replacementDriverId },
+        });
+      }
+
+      let title: string;
+      let body: string;
+      let data: any = {
+        leagueId,
+        substitutionId: substitution.id,
+        originalDriverId: substitution.originalDriverId,
+        replacementDriverId: substitution.replacementDriverId,
+      };
+
+      if (replacementDriver) {
+        title = 'Driver Substitution';
+        if (policy === 'auto_replace') {
+          body = `${originalDriver?.code || 'Your driver'} has been replaced by ${replacementDriver.code}. Your pick has been automatically updated.`;
+        } else if (policy === 'redraft') {
+          body = `${originalDriver?.code || 'Your driver'} has been replaced by ${replacementDriver.code}. You have 24 hours to select a different driver or keep the replacement.`;
+          data.redraftRequired = true;
+        } else {
+          body = `${originalDriver?.code || 'Your driver'} has been replaced by ${replacementDriver.code}.`;
+        }
+      } else {
+        title = 'Driver DNS (Did Not Start)';
+        if (policy === 'redraft') {
+          body = `${originalDriver?.code || 'Your driver'} will not start. You have 24 hours to select a replacement driver.`;
+          data.redraftRequired = true;
+        } else {
+          body = `${originalDriver?.code || 'Your driver'} will not start. You will score 0 points for this driver.`;
+        }
+      }
+
+      // Create notification
+      await this.prisma.notification.create({
+        data: {
+          userId,
+          type: 'driver_substitution',
+          title,
+          body,
+          data,
+        },
+      });
+
+      console.log(`[DraftsService] Notified user ${userId} of substitution`);
+    } catch (error) {
+      console.error('[DraftsService] Error notifying player:', error);
+    }
+  }
+
+  /**
+   * Get substitution impact for a specific draft window
+   * Returns info about how a substitution affects this draft
+   */
+  async getSubstitutionImpactForDraft(
+    draftWindowId: string,
+    substitutionId: string
+  ): Promise<{ affected: boolean; picks?: any[]; policy?: SubstitutionPolicy }> {
+    const substitution = await this.prisma.driverSubstitution.findUnique({
+      where: { id: substitutionId },
+    });
+
+    if (!substitution) {
+      return { affected: false };
+    }
+
+    const draftWindow = await this.prisma.draftWindow.findUnique({
+      where: { id: draftWindowId },
+      include: {
+        league: true,
+        picks: {
+          where: { driverId: substitution.originalDriverId },
+          include: { driver: true, leagueMember: true },
+        },
+      },
+    });
+
+    if (!draftWindow || draftWindow.raceId !== substitution.raceId) {
+      return { affected: false };
+    }
+
+    if (draftWindow.picks.length === 0) {
+      return { affected: false };
+    }
+
+    return {
+      affected: true,
+      picks: draftWindow.picks,
+      policy: draftWindow.league.substitutionPolicy as SubstitutionPolicy,
+    };
   }
 }
 

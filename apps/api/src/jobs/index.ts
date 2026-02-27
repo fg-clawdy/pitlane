@@ -30,6 +30,8 @@ export {
 // Workers
 export { jolpicaWorker, closeJolpicaWorker } from './jolpica.worker';
 export { draftWorker, closeDraftWorker } from './draft.worker';
+export { scoringWorker, closeScoringWorker } from './scoring.worker';
+export { notificationsWorker, emailChangeWorker, closeNotificationsWorker } from './notifications.worker';
 
 // Scheduler
 export {
@@ -41,3 +43,5 @@ export {
 
 // Type exports for job data
 export type { SyncResultsJobData, SyncSeasonJobData } from './jolpica.worker';
+export type { ScoringCalculateJobData } from './scoring.worker';
+export type { SendPushJobData, SendEmailJobData, EmailChangeApplyJobData } from './notifications.worker';

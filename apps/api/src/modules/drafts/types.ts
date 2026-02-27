@@ -5,7 +5,9 @@
 
 export type DraftType = 'snake' | 'regular';
 export type DraftStatus = 'upcoming' | 'open' | 'closed' | 'completed';
-export type ResolutionMethod = 'manual' | 'auto_preference' | 'random' | 'top_points' | 'no_pick';
+export type ResolutionMethod = 'manual' | 'auto_preference' | 'random' | 'top_points' | 'no_pick' | 'commissioner_override' | 'admin_substitution' | 'driver_redraft';
+
+export type SubstitutionPolicy = 'auto_replace' | 'redraft' | 'none';
 
 export interface DraftWindow {
   id: string;
@@ -154,6 +156,66 @@ export interface SetAutoDraftPreferencesInput {
     driverId: string;
     rank: number;
   }>;
+}
+
+// Commissioner override types
+export interface CommissionerOverrideInput {
+  pickId: string;
+  newDriverId: string;
+}
+
+export interface CommissionerAssignPickInput {
+  leagueMemberId: string;
+  round: number;
+  driverId: string;
+}
+
+// Driver substitution types
+export interface DriverSubstitutionEvent {
+  id: string;
+  raceId: string;
+  originalDriverId: string;
+  replacementDriverId: string | null;
+  reason: string;
+  confirmedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface SubstitutionImpact {
+  draftWindowId: string;
+  leagueId: string;
+  leagueMemberId: string;
+  teamName: string;
+  userId: string;
+  affectedPickId: string;
+  round: number;
+  originalDriverId: string;
+  originalDriverCode: string;
+  replacementDriverId?: string | null;
+  substitutionId: string;
+}
+
+export interface ProcessSubstitutionInput {
+  substitutionId: string;
+}
+
+export interface RedraftWindow {
+  leagueMemberId: string;
+  draftWindowId: string;
+  originalDriverId: string;
+  replacementDriverId: string | null;
+  redraftExpiresAt: Date;
+  availableDrivers: Array<{
+    id: string;
+    code: string;
+    name: string;
+  }>;
+}
+
+export interface SubmitRedraftInput {
+  substitutionId: string;
+  leagueMemberId: string;
+  newDriverId: string;
 }
 
 // System settings defaults
