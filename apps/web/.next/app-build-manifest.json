@@ -1,0 +1,122 @@
+{
+  "pages": {
+    "/_not-found/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/app/_not-found/page-428dc9c9b1148d48.js"
+    ],
+    "/layout": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/css/3beb40ced062aa96.css",
+      "static/chunks/app/layout-90229a585e7eb713.js"
+    ],
+    "/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/664-6d821dc1aacb6b48.js",
+      "static/chunks/app/page-af9a26170eb1cb24.js"
+    ],
+    "/(dashboard)/layout": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/app/(dashboard)/layout-a72eb87e0630f3b9.js"
+    ],
+    "/(dashboard)/dashboard/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/118-bf0519e82f58b053.js",
+      "static/chunks/app/(dashboard)/dashboard/page-e56fcc8d4b63d465.js"
+    ],
+    "/(dashboard)/leagues/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/118-bf0519e82f58b053.js",
+      "static/chunks/app/(dashboard)/leagues/page-438aad93d95b0ec8.js"
+    ],
+    "/(dashboard)/leagues/[id]/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/118-bf0519e82f58b053.js",
+      "static/chunks/app/(dashboard)/leagues/[id]/page-03df5046136cb5ab.js"
+    ],
+    "/(dashboard)/leagues/[id]/draft/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/118-bf0519e82f58b053.js",
+      "static/chunks/app/(dashboard)/leagues/[id]/draft/page-de9a5795ccacd392.js"
+    ],
+    "/(dashboard)/leagues/create/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/118-bf0519e82f58b053.js",
+      "static/chunks/463-0e2ad437d81d6a95.js",
+      "static/chunks/app/(dashboard)/leagues/create/page-bcf15942957436f3.js"
+    ],
+    "/(auth)/layout": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/app/(auth)/layout-a3078617af2b046c.js"
+    ],
+    "/(auth)/login/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/118-bf0519e82f58b053.js",
+      "static/chunks/463-0e2ad437d81d6a95.js",
+      "static/chunks/664-6d821dc1aacb6b48.js",
+      "static/chunks/app/(auth)/login/page-e6ebc444e420e1e4.js"
+    ],
+    "/(auth)/forgot-password/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/118-bf0519e82f58b053.js",
+      "static/chunks/463-0e2ad437d81d6a95.js",
+      "static/chunks/664-6d821dc1aacb6b48.js",
+      "static/chunks/app/(auth)/forgot-password/page-033edf5c6decb8ef.js"
+    ],
+    "/(auth)/signup/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/118-bf0519e82f58b053.js",
+      "static/chunks/463-0e2ad437d81d6a95.js",
+      "static/chunks/664-6d821dc1aacb6b48.js",
+      "static/chunks/app/(auth)/signup/page-40d60e4633e0cfb9.js"
+    ],
+    "/(auth)/reset-password/page": [
+      "static/chunks/webpack-7a3bd71103638d93.js",
+      "static/chunks/87c73c54-24122e7b92478d00.js",
+      "static/chunks/18-b339bcfc88586b9e.js",
+      "static/chunks/main-app-874c1ef4915e8ee8.js",
+      "static/chunks/118-bf0519e82f58b053.js",
+      "static/chunks/463-0e2ad437d81d6a95.js",
+      "static/chunks/664-6d821dc1aacb6b48.js",
+      "static/chunks/app/(auth)/reset-password/page-a50f3c497e02275e.js"
+    ]
+  }
+}

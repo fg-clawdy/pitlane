@@ -1,0 +1,13 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/page": "/",
+  "/(dashboard)/dashboard/page": "/dashboard",
+  "/(dashboard)/leagues/page": "/leagues",
+  "/(dashboard)/leagues/[id]/page": "/leagues/[id]",
+  "/(dashboard)/leagues/[id]/draft/page": "/leagues/[id]/draft",
+  "/(dashboard)/leagues/create/page": "/leagues/create",
+  "/(auth)/login/page": "/login",
+  "/(auth)/forgot-password/page": "/forgot-password",
+  "/(auth)/signup/page": "/signup",
+  "/(auth)/reset-password/page": "/reset-password"
+}

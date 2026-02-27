@@ -138,6 +138,21 @@
   - Redraft windows stored in audit_log with action='redraft_window_created' for flexibility
   - League.substitutionPolicy field (string) maps to SubstitutionPolicy type
 ---
+### 2026-02-27: US-023 HTML5 Web Push Notifications
+- Verified PushSubscription model exists in schema (endpoint, p256dh, auth keys)
+- Verified addPushSubscription/removePushSubscription methods in users.service.ts
+- Verified VAPID configuration in notifications.worker.ts with 410 Gone handling
+- Verified User.pushEnabled toggle in profile settings
+- Added GET /users/vapid-public-key endpoint for frontend to fetch public key
+- Added getVapidPublicKeyHandler in users.controller.ts
+- TypeScript compiles successfully
+- **Learnings for future iterations:**
+  - Push notifications were mostly pre-implemented in notifications.worker.ts
+  - web-push npm package requires VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars
+  - Frontend needs to call GET /users/vapid-public-key to get the public key for subscription
+  - PushSubscription has unique constraint on [userId, endpoint] to prevent duplicates
+---
+
 ## Notes
 - TypeScript compiles successfully
 - All existing tests should still pass

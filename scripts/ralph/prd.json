@@ -746,9 +746,9 @@
       ],
       "dependencies": ["US-003"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Works on desktop and mobile web",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-27. PushSubscription model stores endpoint, p256dh, auth keys per user. addPushSubscription/removePushSubscription in users.service.ts. VAPID configured in notifications.worker.ts with 410 Gone handling for expired subscriptions. User.pushEnabled toggle in profile settings. Added GET /users/vapid-public-key endpoint for frontend to fetch public key.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {

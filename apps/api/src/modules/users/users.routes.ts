@@ -9,11 +9,15 @@ import {
   getEmailChangeStatusHandler,
   cancelEmailChangeHandler,
   waiveHoldEmailChangeHandler,
-  verifyEmailChangeHandler
+  verifyEmailChangeHandler,
+  getVapidPublicKeyHandler
 } from './users.controller';
 import { authenticate } from '../../lib/auth';
 
 export async function userRoutes(fastify: FastifyInstance): Promise<void> {
+  // GET /api/v1/users/vapid-public-key - Get VAPID public key for push subscriptions (public)
+  fastify.get('/vapid-public-key', getVapidPublicKeyHandler);
+
   // GET /api/v1/users/me - Get current user profile
   fastify.get('/me', {
     preHandler: authenticate,

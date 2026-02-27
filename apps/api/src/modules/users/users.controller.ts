@@ -13,6 +13,19 @@ import {
 } from './users.service';
 import { UpdateProfileDto, ChangePasswordDto, PushSubscriptionDto, EmailChangeRequestDto } from './types';
 
+// VAPID public key endpoint - returns the public key for frontend push subscription
+export async function getVapidPublicKeyHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  const publicKey = process.env.VAPID_PUBLIC_KEY;
+  if (!publicKey) {
+    reply.status(503).send({ error: 'Push notifications not configured' });
+    return;
+  }
+  reply.status(200).send({ publicKey });
+}
+
 export async function getMeHandler(
   request: FastifyRequest,
   reply: FastifyReply
