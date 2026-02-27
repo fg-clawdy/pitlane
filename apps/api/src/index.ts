@@ -7,6 +7,7 @@ import { f1dataRoutes } from './modules/f1data/f1data.routes';
 import { leaguesRoutes } from './modules/leagues/leagues.routes';
 import { scoringRoutes } from './modules/scoring/scoring.routes';
 import { draftsRoutes, draftWebSocketRoutes } from './modules/drafts/drafts.routes';
+import { notificationsRoutes } from './modules/notifications/notifications.routes';
 import { F1DataService } from './modules/f1data/f1data.service';
 import { PrismaClient } from '@prisma/client';
 
@@ -45,6 +46,7 @@ fastify.register(async function(fastify) {
   await fastify.register(leaguesRoutes, { prefix: '/api/v1' });
   await fastify.register(scoringRoutes, { prefix: '/api/v1' });
   await fastify.register(draftsRoutes, { prefix: '/api/v1' });
+  await fastify.register(notificationsRoutes, { prefix: '/api/v1' });
   
   // WebSocket routes for live draft board
   await fastify.register(draftWebSocketRoutes);

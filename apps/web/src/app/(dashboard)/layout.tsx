@@ -1,6 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 
 export default function DashboardLayout({
   children,
@@ -8,6 +10,18 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const [token, setToken] = useState<string>('');
+  
+  useEffect(() => {
+    // Get token on client-side
+    const accessToken = sessionStorage.getItem('accessToken') || '';
+    setToken(accessToken);
+    
+    // Redirect to login if no token
+    if (!accessToken) {
+      router.push('/login');
+    }
+  }, [router]);
   
   // For SSR, we check for token on client-side in the page components
   // This layout provides the structure for authenticated pages
@@ -25,6 +39,7 @@ export default function DashboardLayout({
             <a href="/leagues" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Leagues
             </a>
+            {token && <NotificationBell token={token} />}
             <a href="/settings/profile" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Settings
             </a>

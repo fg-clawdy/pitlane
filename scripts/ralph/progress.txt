@@ -3,11 +3,11 @@
 
 ## Summary
 - **Total Stories**: 48
-- **Completed**: 35
-- **Pending**: 13
-- **Progress**: 73%
+- **Completed**: 37
+- **Pending**: 11
+- **Progress**: 77%
 
-## Completed User Stories (35)
+## Completed User Stories (37)
 | ID | Title | Epic | Status | Passes |
 |----|-------|------|--------|--------|
 | US-001 | User Registration with Email Verification | EPIC-001 | done | true |
@@ -32,6 +32,9 @@
 | US-020 | Weekly Winners & Season Podium | EPIC-005 | done | true |
 | US-021 | League Standings View | EPIC-006 | done | true |
 | US-022 | Live Draft Board (WebSocket) | EPIC-006 | done | true |
+| US-023 | HTML5 Web Push Notifications | EPIC-007 | done | true |
+| US-024 | Email Notifications via SMTP | EPIC-007 | done | true |
+| US-025 | In-App Notification Center | EPIC-007 | done | true |
 | US-030 | Landing Page | EPIC-009 | done | true |
 | US-031 | Authentication Screens | EPIC-009 | done | true |
 | US-032 | Dashboard & League List | EPIC-009 | done | true |
@@ -48,12 +51,9 @@
 | US-048 | Background Jobs - Draft System | EPIC-011 | done | true |
 | US-049 | Background Jobs - Scoring & Notifications | EPIC-011 | done | true |
 
-## Pending User Stories (13)
+## Pending User Stories (11)
 | ID | Title | Epic | Status | Priority |
 |----|-------|------|--------|----------|
-| US-023 | HTML5 Web Push Notifications | EPIC-007 | pending | 2 |
-| US-024 | Email Notifications via SMTP | EPIC-007 | pending | 2 |
-| US-025 | In-App Notification Center | EPIC-007 | pending | 2 |
 | US-026 | Draft Event Notifications | EPIC-007 | pending | 2 |
 | US-027 | Admin Dashboard | EPIC-008 | pending | 2 |
 | US-028 | Admin Race Data Entry | EPIC-008 | pending | 2 |
@@ -66,56 +66,79 @@
 
 ## Latest Updates
 
-### 2026-02-26: US-010 Commissioner League Management
-- Added `commissionerOverridePick` method in DraftsService
-- Added `commissionerAssignMissedPick` method in DraftsService
-- Added CommissionerOverrideInput and CommissionerAssignPickInput types
-- Added controller handlers for both methods
-- Added routes:
-  - PATCH /drafts/:draftId/picks/:pickId/override
-  - POST /drafts/:draftId/assign-pick
-- Commissioner override creates audit logs and broadcasts via WebSocket
-- Updated prd.json with US-010 status = done, passes = true
-
-### 2026-02-26: US-013 Auto-Draft Preference Queue
-- Verified getAutoDraftPreferences() and setAutoDraftPreferences() implemented in drafts.service.ts
-- Routes at GET/PUT /users/me/auto-draft-preferences in drafts.routes.ts
-- getNextAutoDraftDriver() helper for auto-draft execution already defined
-- AutoDraftPreference model stores userId, driverId, rank
-- TypeScript compiles successfully
-
-### 2026-02-26: US-043 API Draft Endpoints
-- Verified all required endpoints already implemented in drafts.routes.ts
-- GET /leagues/:id/drafts, GET /leagues/:id/drafts/current, POST /drafts/:draftId/picks
-- GET /users/me/auto-draft-preferences, PUT /users/me/auto-draft-preferences
-- Additional endpoints: GET /drafts/:draftId, GET /drafts/:draftId/state, commissioner override endpoints
-- WebSocket at /ws/leagues/:id/draft for live draft board
-- TypeScript compiles successfully
-
-### 2026-02-26: US-017 Scoring Engine - Linear 20
-- Verified LINEAR_20_SCORING_TABLE already defined in types.ts (positions 1-20 score 20-1)
-- Verified SCORING_CONFIGS.linear_20 configured with no fastest lap bonus
-- Verified calculateDriverScore() in scoring.service.ts handles all three scoring types
+### 2026-02-27: US-025 In-App Notification Center
+- Created frontend notification components at `apps/web/src/components/notifications/`
+- Added notification API functions to `apps/web/src/lib/api.ts`:
+  - Notification type and interface definitions matching backend
+  - getNotifications (paginated with filters)
+  - getUnreadCount
+  - markNotificationAsRead
+  - markAllNotificationsAsRead
+- Created `notification-bell.tsx` component:
+  - Bell icon in dashboard header with unread count badge
+  - Dropdown panel showing 10 most recent notifications
+  - Mark as read / mark all as read functionality
+  - Auto-poll for unread count every 30 seconds
+  - Click to navigate to notification URL if present
+  - Icons per notification type (draft 🏎️, winner 🏆, invite 🎉, etc.)
+- Created notifications page at `apps/web/src/app/(dashboard)/notifications/page.tsx`:
+  - Full notification history with pagination (50 per page)
+  - Filters: All, Unread, Draft, League, Results
+  - Mark individual or all as read
+  - Timestamp display (relative time in dropdown, absolute in page)
+- Updated `apps/web/src/app/(dashboard)/layout.tsx`:
+  - Added NotificationBell component to dashboard header
+  - Token state management for authentication
 - TypeScript compiles successfully
 - **Learnings for future iterations:**
-  - All three scoring systems (fia_official, linear_20, proprietary) were implemented together as part of US-016
-  - ScoringType union type in types.ts controls available scoring modes
-  - SCORING_CONFIGS object contains full configuration for each scoring type
----
+  - Notification bell uses lucide-react Bell icon
+  - Unread badge shows "9+" for counts over 9
+  - Category filters (Draft/League/Results) filter client-side using TYPE_CATEGORIES map
+  - Click on notification marks as read and navigates to data.url if present
 
-### 2026-02-27: US-019 Double Goose Egg (DGE) Tracking
-- Verified DGE tracking already fully implemented in scoring module
-- isDGE calculated in calculateRaceScores() - both drivers score 0 AND both had actual drivers
-- RaceScore.isDGE persisted in database
-- LeagueMemberStat.dgeCount incremented when DGE occurs
-- StandingsEntry.dgeCount displayed in standings
-- recalculateAllLeagueScores() handles admin override recalculation
+### 2026-02-27: US-024 Email Notifications via SMTP
+- Created notifications module at `apps/api/src/modules/notifications/`
+- Added `notifications.types.ts` with:
+  - NotificationType union (16 types: auth, draft, league, results, admin)
+  - TRANSACTIONAL_NOTIFICATION_TYPES set (email_verification, password_reset, email_change_request, email_change_complete)
+  - EMAIL_TEMPLATES with subject, title, bodyTemplate, actionUrl, actionText for each type
+  - Helper functions: interpolateTemplate, generateEmailHtml, generateEmailText, isTransactional
+- Added `notifications.service.ts` with:
+  - createNotification: creates notification record, queues push/email jobs
+  - getNotifications: paginated list with filters (unreadOnly, type)
+  - markAsRead, markAllAsRead, getUnreadCount
+  - Convenience methods for all notification types (notifyDraftWindowOpen, notifyYourTurn, etc.)
+- Added `notifications.controller.ts` with handlers for all endpoints
+- Added `notifications.routes.ts` with routes:
+  - GET /notifications (paginated)
+  - GET /notifications/unread-count
+  - PATCH /notifications/:notificationId/read
+  - POST /notifications/read-all
+- Updated `notifications.worker.ts`:
+  - Added isTransactional import and transactional email handling
+  - Transactional emails bypass user.emailEnabled preference
+  - 5 retries with exponential backoff for email jobs
+- Registered routes in main index.ts
 - TypeScript compiles successfully
 - **Learnings for future iterations:**
-  - DGE was implemented together with US-016/US-017/US-018 as part of scoring engine
-  - DGE condition: `driver1Score === 0 && driver2Score === 0 && driver1Id !== null && driver2Id !== null`
-  - LeagueMemberStat tracks cumulative dgeCount across season
----
+  - All email templates defined in EMAIL_TEMPLATES constant
+  - Transactional emails are: email_verification, password_reset, email_change_request, email_change_complete
+  - Email retry: 5 attempts with exponential backoff starting at 2 seconds
+  - Templates use {{variable}} interpolation syntax
+
+### 2026-02-27: US-023 HTML5 Web Push Notifications
+- Verified PushSubscription model exists in schema (endpoint, p256dh, auth keys)
+- Verified addPushSubscription/removePushSubscription methods in users.service.ts
+- Verified VAPID configuration in notifications.worker.ts with 410 Gone handling
+- Verified User.pushEnabled toggle in profile settings
+- Added GET /users/vapid-public-key endpoint for frontend to fetch public key
+- Added getVapidPublicKeyHandler in users.controller.ts
+- TypeScript compiles successfully
+- **Learnings for future iterations:**
+  - Push notifications were mostly pre-implemented in notifications.worker.ts
+  - web-push npm package requires VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars
+  - Frontend needs to call GET /users/vapid-public-key to get the public key for subscription
+  - PushSubscription has unique constraint on [userId, endpoint] to prevent duplicates
 
 ### 2026-02-27: US-014 Driver Substitution After Draft Lock
 - Added SubstitutionPolicy type (auto_replace, redraft, none) to drafts/types.ts
@@ -137,21 +160,19 @@
   - Substitution handling requires checking both draft window status (open vs locked) and league policy
   - Redraft windows stored in audit_log with action='redraft_window_created' for flexibility
   - League.substitutionPolicy field (string) maps to SubstitutionPolicy type
----
-### 2026-02-27: US-023 HTML5 Web Push Notifications
-- Verified PushSubscription model exists in schema (endpoint, p256dh, auth keys)
-- Verified addPushSubscription/removePushSubscription methods in users.service.ts
-- Verified VAPID configuration in notifications.worker.ts with 410 Gone handling
-- Verified User.pushEnabled toggle in profile settings
-- Added GET /users/vapid-public-key endpoint for frontend to fetch public key
-- Added getVapidPublicKeyHandler in users.controller.ts
+
+### 2026-02-27: US-019 Double Goose Egg (DGE) Tracking
+- Verified DGE tracking already fully implemented in scoring module
+- isDGE calculated in calculateRaceScores() - both drivers score 0 AND both had actual drivers
+- RaceScore.isDGE persisted in database
+- LeagueMemberStat.dgeCount incremented when DGE occurs
+- StandingsEntry.dgeCount displayed in standings
+- recalculateAllLeagueScores() handles admin override recalculation
 - TypeScript compiles successfully
 - **Learnings for future iterations:**
-  - Push notifications were mostly pre-implemented in notifications.worker.ts
-  - web-push npm package requires VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars
-  - Frontend needs to call GET /users/vapid-public-key to get the public key for subscription
-  - PushSubscription has unique constraint on [userId, endpoint] to prevent duplicates
----
+  - DGE was implemented together with US-016/US-017/US-018 as part of scoring engine
+  - DGE condition: `driver1Score === 0 && driver2Score === 0 && driver1Id !== null && driver2Id !== null`
+  - LeagueMemberStat tracks cumulative dgeCount across season
 
 ## Notes
 - TypeScript compiles successfully

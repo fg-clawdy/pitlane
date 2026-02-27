@@ -766,9 +766,9 @@
       ],
       "dependencies": ["US-003"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "SMTP credentials via environment variables",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-27. Created notifications module with types, templates, service, controller, and routes. Email templates for all 16 notification types (auth, draft, league, results, admin). SMTP via nodemailer with 5 retries and exponential backoff. Transactional emails (email_verification, password_reset, email_change_request, email_change_complete) bypass user preferences. Routes: GET /notifications, GET /notifications/unread-count, PATCH /notifications/:id/read, POST /notifications/read-all.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -787,9 +787,9 @@
       ],
       "dependencies": ["US-023", "US-024"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Notification history retained indefinitely",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-27. Notification bell component in dashboard header with dropdown panel showing 10 most recent. Full notification page at /notifications with filters (All/Unread/Draft/League/Results). Mark as read and mark all as read functionality. 50 per page pagination. Icons per notification type. Click navigates to notification URL if present.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {

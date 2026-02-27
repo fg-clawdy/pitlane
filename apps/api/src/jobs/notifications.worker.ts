@@ -1,6 +1,9 @@
 /**
  * Notifications Worker
  * Handles background jobs for push and email notification delivery
+ * 
+ * Retry policy: 5 retries with exponential backoff (2s, 4s, 8s, 16s, 32s)
+ * Transactional emails bypass user preferences
  */
 
 import { Worker, Job } from 'bullmq';
@@ -9,6 +12,7 @@ import webpush from 'web-push';
 import nodemailer from 'nodemailer';
 import { getPrisma } from './instances';
 import { JOB_NAMES, QUEUE_NAMES } from './queues';
+import { isTransactional, NotificationType } from '../modules/notifications/notifications.types';
 
 // Redis connection for worker
 const connection = new IORedis({
@@ -172,6 +176,7 @@ async function handleSendPush(job: Job<SendPushJobData>) {
 
 /**
  * Handle email notification sending
+ * Supports transactional emails that bypass user preferences
  */
 async function handleSendEmail(job: Job<SendEmailJobData>) {
   const { notificationId, userId, subject, htmlBody, textBody } = job.data;
@@ -179,19 +184,34 @@ async function handleSendEmail(job: Job<SendEmailJobData>) {
 
   console.log(`[NotificationsWorker] Sending email notification ${notificationId} to user ${userId}`);
 
-  // Get user's email
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { email: true, displayName: true, emailEnabled: true },
-  });
+  // Get user's email and notification
+  const [user, notification] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, displayName: true, emailEnabled: true },
+    }),
+    prisma.notification.findUnique({
+      where: { id: notificationId },
+      select: { type: true },
+    }),
+  ]);
 
   if (!user) {
     throw new Error(`User ${userId} not found`);
   }
 
-  if (!user.emailEnabled) {
+  // Check if this is a transactional email (cannot be disabled)
+  const notificationType = notification?.type as NotificationType | undefined;
+  const isTransactionalEmail = notificationType ? isTransactional(notificationType) : false;
+
+  // Skip if user has disabled emails AND this is not a transactional email
+  if (!user.emailEnabled && !isTransactionalEmail) {
     console.log(`[NotificationsWorker] Email notifications disabled for user ${userId}`);
     return { success: true, skipped: true, reason: 'disabled' };
+  }
+
+  if (isTransactionalEmail) {
+    console.log(`[NotificationsWorker] Sending transactional email (type: ${notificationType}) to user ${userId}`);
   }
 
   const transporter = createTransporter();
