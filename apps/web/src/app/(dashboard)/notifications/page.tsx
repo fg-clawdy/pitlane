@@ -44,11 +44,16 @@ export default function NotificationsPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
+  const [token, setToken] = useState('');
 
-  const token = sessionStorage.getItem('accessToken') || '';
+  // Get token from sessionStorage on client side only
+  useEffect(() => {
+    setToken(sessionStorage.getItem('accessToken') || '');
+  }, []);
 
   const fetchNotifications = useCallback(
     async (pageNum: number, filterValue: string, append = false) => {
+      if (!token) return;
       setLoading(true);
       try {
         const params: {
@@ -92,9 +97,10 @@ export default function NotificationsPage() {
   );
 
   useEffect(() => {
+    if (!token) return;
     setPage(1);
     fetchNotifications(1, filter);
-  }, [filter, fetchNotifications]);
+  }, [filter, token, fetchNotifications]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;

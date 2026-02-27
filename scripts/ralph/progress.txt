@@ -54,12 +54,11 @@
 | US-048 | Background Jobs - Draft System | EPIC-011 | done | true |
 | US-049 | Background Jobs - Scoring & Notifications | EPIC-011 | done | true |
 
-## Pending User Stories (6)
+## Pending User Stories (5)
 | US-029 | System Configuration (Admin) | EPIC-008 | pending | 3 |
 | US-036 | League Settings & Member Management | EPIC-009 | pending | 2 |
 | US-037 | User Profile & Notifications | EPIC-009 | pending | 2 |
 | US-038 | Admin Panel Screens | EPIC-009 | pending | 2 |
-| US-045 | API Notifications Endpoints | EPIC-010 | pending | 2 |
 | US-046 | API Admin Endpoints | EPIC-010 | pending | 2 |
 
 ## Latest Updates
@@ -206,3 +205,20 @@
 ## Notes
 - TypeScript compiles successfully
 - All existing tests should still pass
+
+### 2026-02-27: US-045 API Notifications Endpoints
+- Verified all notification endpoints already implemented in `apps/api/src/modules/notifications/`
+- Routes registered in `apps/api/src/index.ts` under `/api/v1` prefix:
+  - GET /api/v1/notifications (paginated, rate limit: 30/min)
+  - GET /api/v1/notifications/unread-count (rate limit: 60/min)
+  - PATCH /api/v1/notifications/:notificationId/read (rate limit: 60/min)
+  - POST /api/v1/notifications/read-all (rate limit: 10/min)
+- Fixed SSR build error in notifications page:
+  - `sessionStorage.getItem()` was called at render time, causing "sessionStorage is not defined" during Next.js static generation
+  - Moved token retrieval to useEffect hook so it only runs client-side
+  - Added token dependency to fetchNotifications callback
+- TypeScript compiles successfully for both apps/api and apps/web
+- **Learnings for future iterations:**
+  - Next.js 'use client' components still go through static generation during build
+  - Any browser API (sessionStorage, localStorage, window) must be accessed in useEffect or event handlers
+  - Check token availability before making API calls in client components

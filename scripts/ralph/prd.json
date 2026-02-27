@@ -1179,9 +1179,9 @@
       ],
       "dependencies": ["US-025"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "API IDs: API-070 through API-072",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-02-27. All endpoints implemented in notifications module with rate limiting. Routes: GET /notifications (paginated), GET /notifications/unread-count, PATCH /notifications/:notificationId/read, POST /notifications/read-all. Fixed SSR issue in notifications page by moving sessionStorage access to useEffect.",
       "testGates": ["TypeScript compiles", "Integration tests pass"]
     },
     {

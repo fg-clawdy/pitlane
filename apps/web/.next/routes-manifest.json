@@ -80,6 +80,12 @@
       "namedRegex": "^/login(?:/)?$"
     },
     {
+      "page": "/notifications",
+      "regex": "^/notifications(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/notifications(?:/)?$"
+    },
+    {
       "page": "/reset-password",
       "regex": "^/reset\\-password(?:/)?$",
       "routeKeys": {},
