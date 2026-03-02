@@ -1000,9 +1000,9 @@
       ],
       "dependencies": ["US-010"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Screen IDs: SCR-015, SCR-016",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-03-01. Created league settings page at /leagues/[id]/settings with editable fields (name, visibility, join approval, player counts, missed pick resolution, substitution policy). Created member management at /leagues/[id]/settings/members with invite link generation, join request approval, and member removal.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {
@@ -1019,9 +1019,9 @@
       ],
       "dependencies": ["US-003", "US-025"],
       "priority": 2,
-      "status": "pending",
-      "passes": false,
-      "notes": "Screen IDs: SCR-020, SCR-021",
+      "status": "done",
+      "passes": true,
+      "notes": "Completed 2026-03-01. Created /settings/profile page with profile editing form (username, display name, default team name, notification preferences). Notifications page at /notifications already existed with All/Unread/Draft/League/Results filters.",
       "testGates": ["TypeScript compiles", "Unit tests pass"]
     },
     {

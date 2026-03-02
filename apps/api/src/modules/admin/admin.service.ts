@@ -4,6 +4,55 @@
  */
 
 import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
+
+// Default system settings with descriptions
+export const DEFAULT_SYSTEM_SETTINGS = [
+  {
+    key: 'email_change_hold_seconds',
+    value: 86400,
+    description: 'Hold period for email changes in seconds (default: 24 hours). Min: 0, Max: 604800 (7 days)',
+  },
+  {
+    key: 'jolpica_poll_start_hours_after_race',
+    value: 3,
+    description: 'Hours after race start to begin polling Jolpica for results',
+  },
+  {
+    key: 'jolpica_poll_interval_hours',
+    value: 2,
+    description: 'Interval in hours between Jolpica poll attempts',
+  },
+  {
+    key: 'jolpica_max_polls',
+    value: 18,
+    description: 'Maximum number of Jolpica poll attempts before alerting admin',
+  },
+  {
+    key: 'draft_pick_timeout_hours',
+    value: 24,
+    description: 'Hours a player has to make a draft pick before resolution',
+  },
+  {
+    key: 'invite_link_expiry_days',
+    value: 7,
+    description: 'Days before an invite link expires',
+  },
+  {
+    key: 'fia_scoring_table',
+    value: { 1: 25, 2: 18, 3: 15, 4: 12, 5: 10, 6: 8, 7: 6, 8: 4, 9: 2, 10: 1 },
+    description: 'FIA points scoring table: position -> points mapping',
+  },
+  {
+    key: 'max_leagues_per_user',
+    value: 10,
+    description: 'Maximum number of leagues a user can join',
+  },
+  {
+    key: 'max_join_cutoff_races',
+    value: 3,
+    description: 'Number of races into a season before new members cannot join',
+  },
+];
 import {
   AdminUserListParams,
   AdminUserOutput,
@@ -1172,6 +1221,33 @@ export async function deleteRaceResult(
     console.error('[AdminService] Error deleting result:', error);
     return { success: false, error: `Failed to delete result: ${error}` };
   }
+}
+
+/**
+ * Seed default system settings on startup
+ * Only creates settings that don't already exist
+ */
+export async function seedDefaultSystemSettings(): Promise<void> {
+  console.log('[AdminService] Seeding default system settings...');
+  
+  for (const setting of DEFAULT_SYSTEM_SETTINGS) {
+    const existing = await prisma.systemSetting.findUnique({
+      where: { key: setting.key },
+    });
+    
+    if (!existing) {
+      await prisma.systemSetting.create({
+        data: {
+          key: setting.key,
+          value: setting.value as any,
+          description: setting.description,
+        },
+      });
+      console.log(`[AdminService] Created setting: ${setting.key}`);
+    }
+  }
+  
+  console.log('[AdminService] Default system settings seeded');
 }
 
 /**

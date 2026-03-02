@@ -10,6 +10,7 @@ import { draftsRoutes, draftWebSocketRoutes } from './modules/drafts/drafts.rout
 import { notificationsRoutes } from './modules/notifications/notifications.routes';
 import { adminRoutes } from './modules/admin/admin.routes';
 import { F1DataService } from './modules/f1data/f1data.service';
+import { seedDefaultSystemSettings } from './modules/admin/admin.service';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -69,6 +70,9 @@ async function start() {
     if (syncResult.errors.length > 0) {
       console.warn('Sync warnings:', syncResult.errors);
     }
+
+    // Seed default system settings
+    await seedDefaultSystemSettings();
 
     const port = parseInt(process.env.PORT || '3001', 10);
     const host = process.env.HOST || '0.0.0.0';

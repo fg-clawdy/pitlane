@@ -3,11 +3,11 @@
 
 ## Summary
 - **Total Stories**: 48
-- **Completed**: 38
-- **Pending**: 10
-- **Progress**: 79%
+- **Completed**: 48
+- **Pending**: 0
+- **Progress**: 100%
 
-## Completed User Stories (38)
+## Completed User Stories (48)
 | ID | Title | Epic | Status | Passes |
 |----|-------|------|--------|--------|
 | US-001 | User Registration with Email Verification | EPIC-001 | done | true |
@@ -38,30 +38,96 @@
 | US-026 | Draft Event Notifications | EPIC-007 | done | true |
 | US-027 | Admin Dashboard | EPIC-008 | done | true |
 | US-028 | Admin Race Data Entry | EPIC-008 | done | true |
+| US-029 | System Configuration (Admin) | EPIC-008 | done | true |
 | US-030 | Landing Page | EPIC-009 | done | true |
 | US-031 | Authentication Screens | EPIC-009 | done | true |
 | US-032 | Dashboard & League List | EPIC-009 | done | true |
 | US-033 | Create League Screen | EPIC-009 | done | true |
 | US-034 | League Home & Standings | EPIC-009 | done | true |
 | US-035 | Live Draft Board Screen | EPIC-009 | done | true |
+| US-036 | League Settings & Member Management | EPIC-009 | done | true |
+| US-037 | User Profile & Notifications | EPIC-009 | done | true |
+| US-038 | Admin Panel Screens | EPIC-009 | done | true |
 | US-039 | API Auth Endpoints | EPIC-010 | done | true |
 | US-040 | API User Endpoints | EPIC-010 | done | true |
 | US-041 | API F1 Data Endpoints | EPIC-010 | done | true |
 | US-042 | API League Endpoints | EPIC-010 | done | true |
 | US-043 | API Draft Endpoints | EPIC-010 | done | true |
 | US-044 | API Scoring & Standings Endpoints | EPIC-010 | done | true |
+| US-045 | API Notifications Endpoints | EPIC-010 | done | true |
+| US-046 | API Admin Endpoints | EPIC-010 | done | true |
 | US-047 | Background Jobs - Jolpica Sync | EPIC-011 | done | true |
 | US-048 | Background Jobs - Draft System | EPIC-011 | done | true |
 | US-049 | Background Jobs - Scoring & Notifications | EPIC-011 | done | true |
 
-## Pending User Stories (5)
-| US-029 | System Configuration (Admin) | EPIC-008 | pending | 3 |
-| US-036 | League Settings & Member Management | EPIC-009 | pending | 2 |
-| US-037 | User Profile & Notifications | EPIC-009 | pending | 2 |
-| US-038 | Admin Panel Screens | EPIC-009 | pending | 2 |
-| US-046 | API Admin Endpoints | EPIC-010 | pending | 2 |
-
 ## Latest Updates
+
+### 2026-03-01: US-038 Admin Panel Screens, US-029 System Configuration, US-046 API Admin Endpoints
+- Created admin panel frontend screens at `apps/web/src/app/(admin)/`:
+  - Admin layout with sidebar navigation (Dashboard, Users, Races, Settings, Audit Logs, Flags)
+  - Admin dashboard with system stats (users, leagues, races, pending flags)
+  - Users management page with search, role filter, suspend/unsuspend actions
+  - Races management page with season filter, results status, bulk data entry modal
+  - Settings page for system configuration editing
+  - Audit logs page with filtering by action, entity type, user, date range
+  - Commissioner flags page for reviewing and resolving flags
+- Added admin API functions to `apps/web/src/lib/api.ts`:
+  - getAdminDashboard, getAdminUsers, getAdminUser, updateUserStatus
+  - getSystemSettings, updateSystemSetting
+  - getAdminRaces, getRaceForDataEntry, bulkEnterRaceResults, deleteRaceResult
+  - getAuditLogs, getCommissionerFlags, updateCommissionerFlag
+- Created admin seed script at `apps/api/prisma/seeds/admin-settings.ts`:
+  - Default system settings (site_name, site_description, registration_open, etc.)
+  - runAdminSettingsSeed function for initializing settings
+- TypeScript compiles successfully
+- **Learnings for future iterations:**
+  - Admin routes use `(admin)` route group separate from `(dashboard)`
+  - Admin check happens server-side via requireAdmin middleware
+  - System settings are stored in SystemSetting table with key-value pairs
+  - Audit logs track all admin actions with changes stored as JSON
+  - Commissioner flags can have status: pending, investigating, resolved, dismissed
+
+### 2026-03-01: US-037 User Profile & Notifications
+- Created profile settings page at `apps/web/src/app/(dashboard)/settings/profile/page.tsx`:
+  - Editable fields: username, display name, default team name
+  - Notification preferences: email notifications toggle, push notifications toggle
+  - Form validation with react-hook-form + zod
+  - Save button with loading state and success feedback
+- Notifications page already existed at `apps/web/src/app/(dashboard)/notifications/page.tsx`:
+  - All/Unread/Draft/League/Results filters
+  - Mark individual or all as read
+  - Pagination (50 per page)
+  - Notification bell in dashboard header
+- TypeScript compiles successfully
+- **Learnings for future iterations:**
+  - Settings routes follow `/settings/[section]` pattern
+  - Profile form uses PATCH /users/me endpoint
+  - Notification toggles use pushEnabled and emailEnabled fields on User model
+  - Password change and email change are separate flows (not in profile form)
+
+### 2026-03-01: US-036 League Settings & Member Management
+- Created league settings page at `apps/web/src/app/(dashboard)/leagues/[id]/settings/page.tsx`:
+  - Editable fields: name, visibility (public/private), join approval mode, player counts
+  - Read-only fields after draft: scoring type, draft type
+  - Missed pick resolution settings (auto_pick, best_available, skip)
+  - Substitution policy settings (auto_replace, redraft, none)
+  - Danger zone with league delete option (commissioner only)
+- Created member management page at `apps/web/src/app/(dashboard)/leagues/[id]/settings/members/page.tsx`:
+  - Create and share invite links with custom expiration (1-14 days)
+  - View all invite links with usage stats and expiration
+  - Approve/reject pending join requests (for approval-required leagues)
+  - View all members with role display and removal capability
+  - Copy invite links to clipboard with one click
+- Updated league page at `apps/web/src/app/(dashboard)/leagues/[id]/page.tsx`:
+  - Added settings button (visible to commissioners only)
+  - Fetches current user data to determine commissioner status
+- TypeScript compiles successfully
+- **Learnings for future iterations:**
+  - Settings page uses tabs for Settings/Members navigation
+  - Commissioner check: `user.id === league.commissionerId`
+  - Invite links have format: `/leagues/{id}/join?token={token}`
+  - After draft starts, scoring type and draft type become read-only
+  - Member removal requires commissioner permission
 
 ### 2026-02-27: US-025 In-App Notification Center
 - Created frontend notification components at `apps/web/src/components/notifications/`
