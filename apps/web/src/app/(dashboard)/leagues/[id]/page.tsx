@@ -60,12 +60,18 @@ interface LeagueMember {
   };
 }
 
+interface CurrentUser {
+  id: string;
+  username: string;
+}
+
 export default function LeaguePage() {
   const params = useParams();
   const router = useRouter();
   const leagueId = params.id as string;
   
   const [token, setToken] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [standingsView, setStandingsView] = useState<LeagueStandingsView | null>(null);
   const [members, setMembers] = useState<LeagueMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +92,10 @@ export default function LeaguePage() {
     const fetchData = async () => {
       try {
         setLoading(true);
+        
+        // Fetch current user
+        const userData = await api<CurrentUser>('/users/me', { token });
+        setCurrentUser(userData);
         
         // Fetch standings view
         const standingsData = await api<LeagueStandingsView>(
@@ -163,6 +173,11 @@ export default function LeaguePage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {currentUser && members.some(m => m.isCommissioner && m.userId === currentUser.id) && (
+            <Button variant="outline" onClick={() => router.push(`/leagues/${leagueId}/settings`)}>
+              ⚙️ Settings
+            </Button>
+          )}
           <Button variant="outline" onClick={() => router.push(`/leagues/${leagueId}/draft`)}>
             View Draft Board
           </Button>
