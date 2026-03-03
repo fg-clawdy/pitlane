@@ -7,11 +7,15 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
-    "test": "jest"
+    "test": "jest",
+    "seed:f1": "tsx src/scripts/seed-f1-data.ts",
+    "seed:f1:all": "tsx src/scripts/seed-f1-data.ts --all",
+    "seed:f1:stats": "tsx src/scripts/seed-f1-data.ts --stats",
+    "db:seed": "tsx src/scripts/seed-f1-data.ts"
   },
   "dependencies": {
-    "@fastify/cors": "^9.0.0",
-    "@fastify/cookie": "^10.0.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/cookie": "^11.0.0",
     "@prisma/client": "^5.0.0",
     "bcrypt": "^5.1.1",
     "fastify": "^5.0.0",

@@ -6,7 +6,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import ScoringService from './scoring.service';
-import { StandingsEntry, SeasonPodium, WeeklyWinner, LeagueStandingsView, MemberRaceHistory } from './types';
+import { StandingsEntry, SeasonPodium, WeeklyWinner, LeagueStandingsView, MemberRaceHistory, LeagueDriverStanding } from './types';
 
 export class ScoringController {
   private scoringService: ScoringService;
@@ -230,6 +230,25 @@ export class ScoringController {
 
       const view = await this.scoringService.getLeagueStandingsView(leagueId);
       return view;
+    } catch (error) {
+      reply.code(500);
+      throw error;
+    }
+  }
+
+  /**
+   * Get league-specific driver standings (based on league's scoring type)
+   * GET /api/v1/leagues/:id/driver-standings
+   */
+  async getLeagueDriverStandings(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply
+  ): Promise<{ driverStandings: LeagueDriverStanding[] }> {
+    const { id: leagueId } = request.params;
+
+    try {
+      const driverStandings = await this.scoringService.getLeagueDriverStandings(leagueId);
+      return { driverStandings };
     } catch (error) {
       reply.code(500);
       throw error;

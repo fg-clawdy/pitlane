@@ -8,7 +8,10 @@
     "build": "npm run build --workspaces",
     "lint": "npm run lint --workspaces",
     "db:generate": "npx prisma generate --schema=apps/api/prisma/schema.prisma",
-    "db:push": "npx prisma db push --schema=apps/api/prisma/schema.prisma"
+    "db:push": "npx prisma db push --schema=apps/api/prisma/schema.prisma",
+    "seed:f1": "npx tsx apps/api/src/scripts/seed-f1-data.ts",
+    "seed:f1:all": "npx tsx apps/api/src/scripts/seed-f1-data.ts --all",
+    "seed:f1:stats": "npx tsx apps/api/src/scripts/seed-f1-data.ts --stats"
   },
   "keywords": [],
   "author": "",
@@ -28,7 +31,9 @@
   "dependencies": {
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/websocket": "^11.2.0",
+    "bcrypt": "^6.0.0",
     "bullmq": "^5.70.1",
+    "dotenv": "^17.3.1",
     "ioredis": "^5.9.3",
     "nodemailer": "^8.0.1",
     "web-push": "^3.6.7"

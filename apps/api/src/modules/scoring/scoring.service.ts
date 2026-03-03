@@ -830,6 +830,112 @@ export class ScoringService {
   }
 
   /**
+   * Get driver standings within a league context (based on league's scoring type)
+   * This shows how each driver scores according to the league's scoring method
+   */
+  async getLeagueDriverStandings(leagueId: string): Promise<LeagueDriverStanding[]> {
+    // Get league with scoring type
+    const league = await this.prisma.league.findUnique({
+      where: { id: leagueId },
+      include: { season: true },
+    });
+
+    if (!league) {
+      throw new Error('League not found');
+    }
+
+    const scoringType = league.scoringType as ScoringType;
+
+    // Get all races with results for this season
+    const races = await this.prisma.race.findMany({
+      where: {
+        seasonId: league.seasonId,
+        results: { some: {} },
+      },
+      include: {
+        results: {
+          include: {
+            driver: true,
+          },
+        },
+      },
+      orderBy: { round: 'asc' },
+    });
+
+    // Calculate driver scores across all races
+    const driverScores = new Map<string, LeagueDriverStanding>();
+
+    for (const race of races) {
+      for (const result of race.results) {
+        const driverId = result.driverId;
+
+        if (!driverScores.has(driverId)) {
+          driverScores.set(driverId, {
+            driverId: driverId,
+            driverCode: result.driver.code,
+            driverName: `${result.driver.givenName} ${result.driver.familyName}`,
+            driverNumber: result.driver.permanentNumber?.toString() || 'N/A',
+            nationality: result.driver.nationality,
+            totalPoints: 0,
+            racesStarted: 0,
+            wins: 0,
+            podiums: 0,
+            fastestLaps: 0,
+            dnfs: 0,
+            raceResults: [],
+          });
+        }
+
+        const standing = driverScores.get(driverId)!;
+        
+        // Calculate score using league's scoring type
+        const score = this.calculateDriverScore(
+          result.position,
+          result.status,
+          result.fastestLap,
+          scoringType
+        );
+
+        standing.totalPoints += score;
+        standing.racesStarted++;
+        
+        if (result.position === 1) standing.wins++;
+        if (result.position <= 3) standing.podiums++;
+        if (result.fastestLap) standing.fastestLaps++;
+        
+        const normalizedStatus = this.normalizeStatus(result.status);
+        if (normalizedStatus === 'DNF') standing.dnfs++;
+
+        standing.raceResults.push({
+          raceId: race.id,
+          raceName: race.raceName,
+          round: race.round,
+          position: result.position,
+          status: result.status,
+          points: score,
+          fastestLap: result.fastestLap,
+        });
+      }
+    }
+
+    // Sort by total points descending
+    const standings = Array.from(driverScores.values());
+    standings.sort((a, b) => b.totalPoints - a.totalPoints);
+
+    // Assign positions
+    for (let i = 0; i < standings.length; i++) {
+      standings[i].position = i + 1;
+    }
+
+    // Sort race results by round for each driver
+    for (const standing of standings) {
+      standing.raceResults.sort((a, b) => a.round - b.round);
+    }
+
+    return standings;
+  }
+
+  /**
    * Get weekly winner for a specific race
    */
   async getWeeklyWinnerForRace(leagueId: string, raceId: string): Promise<WeeklyWinner | null> {

@@ -106,14 +106,16 @@ model EmailChangeRequest {
 }
 
 model Season {
-  id        String   @id @default(cuid())
-  year      Int      @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  year         Int      @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  races     Race[]
-  drivers   Driver[]
-  leagues   League[]
+  races        Race[]
+  drivers      Driver[]
+  teams        Team[]
+  driverTeams  DriverTeam[]
+  leagues      League[]
 }
 
 model Race {
@@ -152,8 +154,46 @@ model Driver {
   season          Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   results         RaceResult[]
   draftPicks      DraftPick[]
+  driverTeams     DriverTeam[]
 
   @@unique([seasonId, driverId])
+  @@index([seasonId])
+}
+
+model Team {
+  id            String   @id @default(cuid())
+  teamId        String   // jolpica ID (e.g., "red_bull", "ferrari")
+  name          String   // Display name (e.g., "Red Bull Racing")
+  nationality   String
+  seasonId      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  driverTeams   DriverTeam[]
+  raceResults   RaceResult[]
+
+  @@unique([seasonId, teamId])
+  @@index([seasonId])
+}
+
+model DriverTeam {
+  id             String    @id @default(cuid())
+  driverId       String
+  teamId         String
+  seasonId       String
+  startDate      DateTime  @default(now())
+  endDate        DateTime? // null if current
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  driver         Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  team           Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  season         Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([driverId, seasonId, startDate])
+  @@index([driverId])
+  @@index([teamId])
   @@index([seasonId])
 }
 
@@ -161,6 +201,7 @@ model RaceResult {
   id              String   @id @default(cuid())
   raceId          String
   driverId        String
+  teamId          String?  // Team at time of race (nullable for migration)
   position        Int
   points          Float
   status          String
@@ -172,13 +213,15 @@ model RaceResult {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  race            Race     @relation(fields: [raceId], references: [id], onDelete: Cascade)
-  driver          Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  race            Race        @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  driver          Driver      @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  team            Team?       @relation(fields: [teamId], references: [id], onDelete: Cascade)
   discrepancies   DataDiscrepancy[]
 
   @@unique([raceId, driverId])
   @@index([raceId])
   @@index([driverId])
+  @@index([teamId])
 }
 
 model DataDiscrepancy {

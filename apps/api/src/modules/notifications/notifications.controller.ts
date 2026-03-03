@@ -28,7 +28,7 @@ interface MarkAsReadParams {
  * Get user's notifications (paginated)
  */
 export async function getNotificationsHandler(
-  request: FastifyRequest<{ Querystring: GetNotificationsQuery }>,
+  request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
@@ -38,7 +38,8 @@ export async function getNotificationsHandler(
       return;
     }
 
-    const { page, limit, unreadOnly, type } = request.query;
+    const query = request.query as GetNotificationsQuery;
+    const { page, limit, unreadOnly, type } = query;
 
     const result = await getNotifications({
       userId: user.id,
@@ -88,7 +89,7 @@ export async function getUnreadCountHandler(
  * Mark a notification as read
  */
 export async function markAsReadHandler(
-  request: FastifyRequest<{ Params: MarkAsReadParams }>,
+  request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
@@ -98,7 +99,8 @@ export async function markAsReadHandler(
       return;
     }
 
-    const { notificationId } = request.params;
+    const params = request.params as MarkAsReadParams;
+    const { notificationId } = params;
 
     await markAsRead({ userId: user.id, notificationId });
 

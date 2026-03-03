@@ -158,6 +158,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
             <Input
               id="password"
               type="password"
+              autoComplete="new-password"
               {...register('password')}
             />
             {errors.password && (
@@ -173,6 +174,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
             <Input
               id="confirmPassword"
               type="password"
+              autoComplete="new-password"
               {...register('confirmPassword')}
             />
             {errors.confirmPassword && (

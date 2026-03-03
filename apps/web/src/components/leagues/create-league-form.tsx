@@ -94,15 +94,42 @@ export function CreateLeagueForm() {
       }
 
       // Get current season ID
-      const currentYear = new Date().getFullYear();
-      const seasonsResponse = await api<{ seasons: { id: string; year: number }[] }>(
-        `/seasons?year=${currentYear}`,
-        { token }
-      );
+      // F1 season typically runs March-December
+      // If we're in Jan-Feb, we're still in the previous year's season
+      const now = new Date();
+      const currentYear = now.getMonth() < 2 ? now.getFullYear() - 1 : now.getFullYear();
+      
+      let seasons: { id: string; year: number }[] = [];
+      
+      try {
+        const seasonsResponse = await api<{ success: boolean; data: { id: string; year: number }[] }>(
+          '/seasons',
+          { token }
+        );
+        seasons = seasonsResponse.data || [];
+      } catch (apiError) {
+        console.error('Failed to fetch seasons:', apiError);
+        setError('Unable to connect to the server. Please check if the API is running and try again.');
+        setIsLoading(false);
+        return;
+      }
 
-      const season = seasonsResponse.seasons?.[0];
+      // Find the current season, or the most recent season
+      // Try current year first, then previous years in descending order
+      let season = seasons.find((s: { id: string; year: number }) => s.year === currentYear);
+      
       if (!season) {
-        setError('No active F1 season found. Please try again later.');
+        // Try previous year (in case current season hasn't started yet)
+        season = seasons.find((s: { id: string; year: number }) => s.year === currentYear - 1);
+      }
+      
+      if (!season) {
+        // Fall back to the most recent season (first in descending order)
+        season = seasons[0];
+      }
+      
+      if (!season) {
+        setError('No F1 season data found. The F1 data may not have been synced yet. Please contact an administrator or try again later.');
         setIsLoading(false);
         return;
       }

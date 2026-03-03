@@ -24,6 +24,10 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
+    --bottom-nav-height: 64px;
+    --header-height: 56px;
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .dark {
@@ -52,8 +56,102 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
   }
+  
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    overscroll-behavior-y: contain;
+  }
+  
+  /* Mobile touch improvements */
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+  
+  /* Prevent text size adjustment on orientation change */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}
+
+@layer components {
+  /* Mobile-optimized touch target */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Bottom navigation safe area */
+  .bottom-nav-safe {
+    padding-bottom: var(--safe-area-inset-bottom);
+  }
+  
+  /* Header safe area */
+  .header-safe {
+    padding-top: var(--safe-area-inset-top);
+  }
+  
+  /* Mobile card styling */
+  .mobile-card {
+    @apply rounded-lg border bg-card p-4 shadow-sm;
+  }
+  
+  /* Mobile input styling */
+  .mobile-input {
+    @apply text-base; /* Prevents iOS zoom on focus */
+  }
+  
+  /* Hide scrollbar but keep functionality */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Mobile bottom sheet */
+  .bottom-sheet {
+    @apply fixed bottom-0 left-0 right-0 bg-background rounded-t-2xl shadow-lg;
+    padding-bottom: calc(var(--safe-area-inset-bottom) + 16px);
+  }
+  
+  /* Mobile-friendly table wrapper */
+  .mobile-table-wrapper {
+    @apply -mx-4 px-4 overflow-x-auto;
+  }
+}
+
+@layer utilities {
+  /* Safe area padding utilities */
+  .safe-top {
+    padding-top: var(--safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: var(--safe-area-inset-bottom);
+  }
+  
+  /* Mobile-first responsive text */
+  .text-mobile-base {
+    @apply text-sm md:text-base;
+  }
+  
+  .text-mobile-lg {
+    @apply text-base md:text-lg;
+  }
+  
+  .text-mobile-xl {
+    @apply text-lg md:text-xl;
+  }
+  
+  .text-mobile-2xl {
+    @apply text-xl md:text-2xl;
   }
 }

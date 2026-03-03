@@ -241,3 +241,27 @@ export interface WeeklyWinner {
     score: number;
   }>;
 }
+
+export interface LeagueDriverStanding {
+  position?: number;
+  driverId: string;
+  driverCode: string;
+  driverName: string;
+  driverNumber: string;
+  nationality: string;
+  totalPoints: number;
+  racesStarted: number;
+  wins: number;
+  podiums: number;
+  fastestLaps: number;
+  dnfs: number;
+  raceResults: Array<{
+    raceId: string;
+    raceName: string;
+    round: number;
+    position: number;
+    status: string;
+    points: number;
+    fastestLap: boolean;
+  }>;
+}

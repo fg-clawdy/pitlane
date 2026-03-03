@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../ui/card';
 import { api } from '../../lib/api';
 import { useRouter } from 'next/navigation';
 
@@ -54,24 +54,29 @@ export function LoginForm() {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle className="text-2xl">Log in</CardTitle>
+    <Card className="w-full border-0 shadow-lg md:border md:shadow-sm">
+      <CardHeader className="text-center pb-2">
+        <CardTitle className="text-xl">Welcome Back</CardTitle>
+        <CardDescription>Sign in to your account to continue</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {error && (
-            <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
+            <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg border border-destructive/20">
               {error}
             </div>
           )}
           
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
             <Input
               id="email"
               type="email"
               placeholder="you@example.com"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              className="h-12 text-base"
               {...register('email')}
             />
             {errors.email && (
@@ -81,24 +86,41 @@ export function LoginForm() {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <a href="/forgot-password" className="text-sm text-primary hover:underline">
-                Forgot password?
-              </a>
+              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
             </div>
             <Input
               id="password"
               type="password"
+              autoComplete="current-password"
+              className="h-12 text-base"
               {...register('password')}
             />
-            {errors.password && (
-              <p className="text-sm text-destructive">{errors.password.message}</p>
-            )}
+            <div className="flex items-center justify-between">
+              {errors.password && (
+                <p className="text-sm text-destructive">{errors.password.message}</p>
+              )}
+              <a href="/forgot-password" className="text-sm text-primary hover:underline ml-auto">
+                Forgot?
+              </a>
+            </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? 'Logging in...' : 'Log in'}
+          <Button 
+            type="submit" 
+            className="w-full h-12 text-base font-medium" 
+            disabled={isLoading}
+          >
+            {isLoading ? 'Signing in...' : 'Sign In'}
           </Button>
+
+          <div className="text-center pt-4">
+            <p className="text-sm text-muted-foreground">
+              Don't have an account?{' '}
+              <a href="/signup" className="text-primary font-medium hover:underline">
+                Sign up
+              </a>
+            </p>
+          </div>
         </form>
       </CardContent>
     </Card>

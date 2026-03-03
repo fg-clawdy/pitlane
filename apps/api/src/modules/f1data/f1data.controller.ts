@@ -155,6 +155,57 @@ export async function getDriversBySeason(
 }
 
 /**
+ * Get teams (constructors) for a season
+ * GET /api/v1/seasons/:year/teams
+ */
+export async function getTeamsBySeason(
+  request: FastifyRequest<{ Params: { year: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const year = parseInt(request.params.year, 10);
+    if (isNaN(year)) {
+      return reply.code(400).send({
+        success: false,
+        message: 'Invalid year parameter'
+      });
+    }
+
+    const teams = await f1dataService.getTeams(year);
+    return reply.send({
+      success: true,
+      data: teams
+    });
+  } catch (error) {
+    console.error('Error fetching teams:', error);
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to fetch teams'
+    });
+  }
+}
+
+/**
+ * Get all teams (constructors)
+ * GET /api/v1/teams
+ */
+export async function getAllTeams(_request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const teams = await f1dataService.getAllTeams();
+    return reply.send({
+      success: true,
+      data: teams
+    });
+  } catch (error) {
+    console.error('Error fetching all teams:', error);
+    return reply.code(500).send({
+      success: false,
+      message: 'Failed to fetch teams'
+    });
+  }
+}
+
+/**
  * Sync current season (admin only - for now, open)
  * POST /api/v1/admin/sync
  */

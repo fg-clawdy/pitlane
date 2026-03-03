@@ -47,9 +47,13 @@ export default function ProfileSettingsPage() {
   const [showEmailForm, setShowEmailForm] = useState(false);
 
   useEffect(() => {
-    const storedToken = sessionStorage.getItem('token');
+    const storedToken = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
+    if (!storedToken) {
+      router.push('/login');
+      return;
+    }
     setToken(storedToken);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (token) {

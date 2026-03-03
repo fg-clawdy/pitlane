@@ -7,6 +7,27 @@ interface ApiOptions {
   token?: string;
 }
 
+export class ApiError extends Error {
+  public readonly isNetworkError: boolean;
+  public readonly statusCode?: number;
+
+  constructor(
+    message: string,
+    isNetworkError: boolean = false,
+    statusCode?: number
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.isNetworkError = isNetworkError;
+    this.statusCode = statusCode;
+  }
+
+  static isApiError(error: unknown): error is ApiError {
+    return error instanceof ApiError || 
+      (typeof error === 'object' && error !== null && 'isNetworkError' in error);
+  }
+}
+
 export async function api<T>(
   endpoint: string,
   options: ApiOptions = {}
@@ -32,11 +53,38 @@ export async function api<T>(
     config.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+  } catch (error) {
+    // Handle network errors (connection refused, timeout, etc.)
+    throw new ApiError(
+      'Unable to connect to the server. Please check if the API is running.',
+      true
+    );
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-    throw new Error(error.message || 'API request failed');
+    
+    // Handle authentication errors - redirect to login only if a token was provided
+    // (don't redirect if no token was sent, as that's a different issue)
+    if (response.status === 401 && token) {
+      // Clear stored tokens
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('accessToken');
+        // Redirect to login page
+        window.location.href = '/login';
+      }
+      throw new ApiError('Session expired. Redirecting to login...', false, response.status);
+    }
+    
+    throw new ApiError(
+      error.error || error.message || 'API request failed',
+      false,
+      response.status
+    );
   }
 
   return response.json();
@@ -523,4 +571,130 @@ export async function bulkEnterRaceResults(token: string, data: BulkRaceResultDt
 
 export async function deleteRaceResult(token: string, resultId: string): Promise<{ success: boolean; error?: string }> {
   return api(`${ADMIN_API_BASE}/races/results/${resultId}`, { method: 'DELETE', token });
+}
+
+// ========== PUBLIC F1 DATA API TYPES ==========
+
+export interface Season {
+  id: string;
+  year: number;
+  createdAt: string;
+  updatedAt: string;
+  races: Race[];
+}
+
+export interface Race {
+  id: string;
+  seasonId: string;
+  round: number;
+  raceName: string;
+  circuitName: string;
+  date: string;
+  time: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Driver {
+  id: string;
+  driverId: string;
+  permanentNumber: number | null;
+  code: string;
+  givenName: string;
+  familyName: string;
+  nationality: string;
+  dateOfBirth: string;
+  seasonId: string;
+  teamId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Team {
+  id: string;
+  teamId: string;
+  name: string;
+  fullName: string;
+  nationality: string;
+  url: string | null;
+  seasonId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RaceResultPublic {
+  id: string;
+  raceId: string;
+  driverId: string;
+  position: number;
+  points: number;
+  status: string;
+  time: string | null;
+  fastestLap: boolean;
+  driver: {
+    id: string;
+    code: string;
+    givenName: string;
+    familyName: string;
+    permanentNumber: number | null;
+    nationality: string;
+  };
+}
+
+export interface LeagueDriverStanding {
+  position: number;
+  driverId: string;
+  driverCode: string;
+  driverName: string;
+  driverNumber: string;
+  nationality: string;
+  totalPoints: number;
+  racesStarted: number;
+  wins: number;
+  podiums: number;
+  fastestLaps: number;
+  dnfs: number;
+  raceResults: Array<{
+    raceId: string;
+    raceName: string;
+    round: number;
+    position: number;
+    status: string;
+    points: number;
+    fastestLap: boolean;
+  }>;
+}
+
+// ========== PUBLIC F1 DATA API FUNCTIONS ==========
+
+export async function getSeasons(): Promise<Season[]> {
+  return api<Season[]>('/seasons');
+}
+
+export async function getRacesBySeason(year: number): Promise<Race[]> {
+  return api<Race[]>(`/seasons/${year}/races`);
+}
+
+export async function getRace(year: number, round: number): Promise<Race> {
+  return api<Race>(`/seasons/${year}/races/${round}`);
+}
+
+export async function getRaceResultsPublic(year: number, round: number): Promise<RaceResultPublic[]> {
+  return api<RaceResultPublic[]>(`/seasons/${year}/races/${round}/results`);
+}
+
+export async function getDriversBySeason(year: number): Promise<Driver[]> {
+  return api<Driver[]>(`/seasons/${year}/drivers`);
+}
+
+export async function getLeagueDriverStandings(leagueId: string): Promise<{ driverStandings: LeagueDriverStanding[] }> {
+  return api<{ driverStandings: LeagueDriverStanding[] }>(`/leagues/${leagueId}/driver-standings`);
+}
+
+export async function getTeamsBySeason(year: number): Promise<Team[]> {
+  return api<Team[]>(`/seasons/${year}/teams`);
+}
+
+export async function getAllTeams(): Promise<Team[]> {
+  return api<Team[]>('/teams');
 }

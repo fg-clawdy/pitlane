@@ -9,6 +9,8 @@ import {
   getRacesBySeason,
   getRace,
   getDriversBySeason,
+  getTeamsBySeason,
+  getAllTeams,
   syncCurrentSeason,
   getRaceResults,
   syncRaceResults,
@@ -34,6 +36,12 @@ export async function f1dataRoutes(fastify: FastifyInstance) {
 
   // Get drivers for a season
   fastify.get('/seasons/:year/drivers', getDriversBySeason);
+
+  // Get teams (constructors) for a season
+  fastify.get('/seasons/:year/teams', getTeamsBySeason);
+
+  // Get all teams
+  fastify.get('/teams', getAllTeams);
 
   // Admin sync endpoint
   fastify.post('/admin/sync', syncCurrentSeason);

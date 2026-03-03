@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/api';
+import { Settings, ChevronLeft, Users, Trophy, Clock, Medal, Flag } from 'lucide-react';
 
 interface StandingsEntry {
   rank: number;
@@ -78,7 +79,7 @@ export default function LeaguePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedToken = sessionStorage.getItem('token');
+    const storedToken = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
     if (!storedToken) {
       router.push('/login');
       return;
@@ -122,7 +123,13 @@ export default function LeaguePage() {
 
   const formatDateTime = (dateStr: string | null) => {
     if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleString();
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(undefined, { 
+      month: 'short', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
   };
 
   const getDraftStatusBadge = (status: string) => {
@@ -162,163 +169,178 @@ export default function LeaguePage() {
     );
   }
 
+  const isCommissioner = currentUser && members.some(m => m.isCommissioner && m.userId === currentUser.id);
+
   return (
-    <div className="space-y-6">
-      {/* League Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">{standingsView.leagueName}</h1>
-          <p className="text-muted-foreground">
-            {standingsView.seasonYear} Season • {standingsView.visibility === 'public' ? 'Public' : 'Private'} League
-          </p>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => router.push('/leagues')}
+            className="h-8 w-8"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-xl font-bold">{standingsView.leagueName}</h1>
+            <p className="text-sm text-muted-foreground">
+              {standingsView.seasonYear} • {standingsView.visibility}
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
-          {currentUser && members.some(m => m.isCommissioner && m.userId === currentUser.id) && (
-            <Button variant="outline" onClick={() => router.push(`/leagues/${leagueId}/settings`)}>
-              ⚙️ Settings
+          {isCommissioner && (
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => router.push(`/leagues/${leagueId}/settings`)}
+              className="h-10 w-10"
+            >
+              <Settings className="h-5 w-5" />
             </Button>
           )}
-          <Button variant="outline" onClick={() => router.push(`/leagues/${leagueId}/draft`)}>
-            View Draft Board
-          </Button>
         </div>
       </div>
 
       {/* Current Week Status */}
       {standingsView.currentWeek && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Current Race: {standingsView.currentWeek.raceName}</span>
-              <span className={`text-sm px-2 py-1 rounded-full ${getDraftStatusBadge(standingsView.currentWeek.draftStatus)}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-primary" />
+                <span className="font-medium">{standingsView.currentWeek.raceName}</span>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${getDraftStatusBadge(standingsView.currentWeek.draftStatus)}`}>
                 {standingsView.currentWeek.draftStatus.replace('_', ' ').toUpperCase()}
               </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3 text-sm mb-4">
               <div>
-                <p className="text-muted-foreground">Round</p>
-                <p className="font-medium">{standingsView.currentWeek.round}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Draft Opens</p>
+                <p className="text-muted-foreground text-xs">Opens</p>
                 <p className="font-medium">{formatDateTime(standingsView.currentWeek.opensAt)}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Draft Closes</p>
+                <p className="text-muted-foreground text-xs">Closes</p>
                 <p className="font-medium">{formatDateTime(standingsView.currentWeek.closesAt)}</p>
               </div>
-              {standingsView.currentWeek.draftStatus === 'open' && standingsView.currentWeek.turnExpiresAt && (
-                <div>
-                  <p className="text-muted-foreground">Turn Expires</p>
-                  <p className="font-medium text-orange-600">{formatDateTime(standingsView.currentWeek.turnExpiresAt)}</p>
-                </div>
-              )}
             </div>
-            
-            {/* Pick Progress */}
-            {standingsView.currentWeek.draftStatus === 'open' && (
-              <div className="mt-4">
-                <p className="text-sm font-medium mb-2">Pick Progress</p>
-                <div className="space-y-2">
-                  {standingsView.currentWeek.pickedMembers.map((member) => (
-                    <div key={member.leagueMemberId} className="flex items-center justify-between text-sm bg-muted/50 rounded px-3 py-2">
-                      <span>{member.teamName}</span>
-                      <div className="flex gap-2">
-                        <span className={`px-2 py-0.5 rounded ${member.hasPickedRound1 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                          R1
-                        </span>
-                        <span className={`px-2 py-0.5 rounded ${member.hasPickedRound2 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                          R2
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+
+            <Button 
+              className="w-full" 
+              onClick={() => router.push(`/leagues/${leagueId}/draft`)}
+            >
+              View Draft Board
+            </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* Standings Table */}
+      {/* Quick Links */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card 
+          className="cursor-pointer hover:bg-muted/50 transition-colors"
+          onClick={() => router.push(`/leagues/${leagueId}/draft`)}
+        >
+          <CardContent className="p-4 text-center">
+            <Trophy className="h-5 w-5 mx-auto text-primary mb-2" />
+            <p className="text-sm font-medium">Draft Board</p>
+          </CardContent>
+        </Card>
+        <Card 
+          className="cursor-pointer hover:bg-muted/50 transition-colors"
+          onClick={() => router.push(`/leagues/${leagueId}/drivers`)}
+        >
+          <CardContent className="p-4 text-center">
+            <Flag className="h-5 w-5 mx-auto text-primary mb-2" />
+            <p className="text-sm font-medium">Driver Standings</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Standings */}
       <Card>
-        <CardHeader>
-          <CardTitle>Season Standings</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Medal className="h-4 w-4" />
+            Season Standings
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {standingsView.standings.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">No standings yet. Complete a race to see scores.</p>
+            <p className="text-muted-foreground text-center py-8 px-4 text-sm">
+              No standings yet. Complete a race to see scores.
+            </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-2 font-medium">Rank</th>
-                    <th className="text-left py-3 px-2 font-medium">Team</th>
-                    <th className="text-left py-3 px-2 font-medium hidden md:table-cell">Manager</th>
-                    <th className="text-right py-3 px-2 font-medium">Points</th>
-                    <th className="text-right py-3 px-2 font-medium hidden sm:table-cell">Wins</th>
-                    <th className="text-right py-3 px-2 font-medium hidden sm:table-cell">DGE</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {standingsView.standings.map((entry) => (
-                    <tr key={entry.leagueMemberId} className="border-b last:border-0 hover:bg-muted/50">
-                      <td className="py-3 px-2">
-                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
-                          entry.rank === 1 ? 'bg-yellow-100 text-yellow-800' :
-                          entry.rank === 2 ? 'bg-gray-100 text-gray-800' :
-                          entry.rank === 3 ? 'bg-orange-100 text-orange-800' :
-                          'text-muted-foreground'
-                        }`}>
-                          {entry.rank}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 font-medium">{entry.teamName}</td>
-                      <td className="py-3 px-2 hidden md:table-cell text-muted-foreground">
-                        {entry.displayName || entry.username}
-                      </td>
-                      <td className="py-3 px-2 text-right font-bold">{entry.totalPoints}</td>
-                      <td className="py-3 px-2 text-right hidden sm:table-cell">
+            <div className="divide-y">
+              {standingsView.standings.slice(0, 5).map((entry) => (
+                <div 
+                  key={entry.leagueMemberId} 
+                  className="flex items-center justify-between p-3 hover:bg-muted/50"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${
+                      entry.rank === 1 ? 'bg-yellow-100 text-yellow-800' :
+                      entry.rank === 2 ? 'bg-gray-100 text-gray-800' :
+                      entry.rank === 3 ? 'bg-orange-100 text-orange-800' :
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {entry.rank}
+                    </span>
+                    <div>
+                      <p className="font-medium text-sm">{entry.teamName}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         {entry.weeklyWins > 0 && (
-                          <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-sm">
-                            {entry.weeklyWins}
-                          </span>
+                          <span className="text-green-600">{entry.weeklyWins}W</span>
                         )}
-                      </td>
-                      <td className="py-3 px-2 text-right hidden sm:table-cell">
                         {entry.dgeCount > 0 && (
-                          <span className="text-red-600">🥚🥚 {entry.dgeCount}</span>
+                          <span className="text-red-600">🥚{entry.dgeCount}</span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold">{entry.totalPoints}</p>
+                    <p className="text-xs text-muted-foreground">pts</p>
+                  </div>
+                </div>
+              ))}
+              {standingsView.standings.length > 5 && (
+                <div className="p-3 text-center">
+                  <Button variant="ghost" size="sm" className="text-primary">
+                    View all {standingsView.standings.length} teams
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Members List */}
+      {/* Members */}
       <Card>
-        <CardHeader>
-          <CardTitle>Members ({members.length})</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Members ({members.length})
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-2">
+        <CardContent className="p-0">
+          <div className="divide-y max-h-64 overflow-y-auto">
             {members.map((member) => (
-              <div key={member.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                <div className="flex items-center gap-3">
-                  <div>
-                    <p className="font-medium">{member.teamName}</p>
-                    <p className="text-sm text-muted-foreground">{member.user.displayName || member.user.username}</p>
-                  </div>
+              <div key={member.id} className="flex items-center justify-between p-3">
+                <div>
+                  <p className="font-medium text-sm">{member.teamName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {member.user.displayName || member.user.username}
+                  </p>
                 </div>
                 {member.isCommissioner && (
-                  <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">
+                  <span className="bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded-full">
                     Commissioner
                   </span>
                 )}

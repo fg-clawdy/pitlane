@@ -1,3 +1,7 @@
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import rateLimit from '@fastify/rate-limit';
@@ -44,7 +48,7 @@ fastify.register(require('@fastify/cookie'), {
 fastify.register(async function(fastify) {
   await fastify.register(authRoutes, { prefix: '/api/v1/auth' });
   await fastify.register(userRoutes, { prefix: '/api/v1/users' });
-  await fastify.register(f1dataRoutes);
+  await fastify.register(f1dataRoutes, { prefix: '/api/v1' });
   await fastify.register(leaguesRoutes, { prefix: '/api/v1' });
   await fastify.register(scoringRoutes, { prefix: '/api/v1' });
   await fastify.register(draftsRoutes, { prefix: '/api/v1' });

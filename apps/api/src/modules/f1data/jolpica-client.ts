@@ -50,6 +50,13 @@ export interface JolpicaDriver {
   nationality: string;
 }
 
+export interface JolpicaConstructor {
+  constructorId: string;
+  url: string;
+  name: string;
+  nationality: string;
+}
+
 export interface JolpicaRaceResult {
   number: string;
   position: string;
@@ -95,11 +102,36 @@ export interface JolpicaResponse<T> {
     DriverTable?: {
       Drivers: JolpicaDriver[];
     };
+    ConstructorTable?: {
+      Constructors: JolpicaConstructor[];
+    };
     SeasonTable?: {
       Seasons: JolpicaSeason[];
     };
     Race?: {
       Results: JolpicaRaceResult[];
+    };
+  };
+}
+
+// Response type specifically for race results
+export interface JolpicaRaceResultsResponse {
+  MRData: {
+    xmlns: string;
+    series: string;
+    url: string;
+    limit: string;
+    offset: string;
+    total: string;
+    RaceTable: {
+      season: string;
+      round: string;
+      Races: Array<{
+        season: string;
+        round: string;
+        raceName: string;
+        Results: JolpicaRaceResult[];
+      }>;
     };
   };
 }
@@ -176,8 +208,21 @@ export class JolpicaClient {
    * Get race results for a specific race
    */
   async getRaceResults(seasonYear: number, round: number): Promise<JolpicaRaceResult[]> {
-    const response = await this.fetch<JolpicaResponse<JolpicaRaceResult>>(`/${seasonYear}/${round}/results.json`);
-    return response?.MRData?.Race?.Results || [];
+    const response = await this.fetch<JolpicaRaceResultsResponse>(`/${seasonYear}/${round}/results.json`);
+    // Results are nested in RaceTable.Races[0].Results
+    const races = response?.MRData?.RaceTable?.Races;
+    if (races && races.length > 0) {
+      return races[0].Results || [];
+    }
+    return [];
+  }
+
+  /**
+   * Get constructors for a specific season
+   */
+  async getConstructors(seasonYear: number): Promise<JolpicaConstructor[]> {
+    const response = await this.fetch<JolpicaResponse<JolpicaConstructor>>(`/${seasonYear}/constructors.json`);
+    return response?.MRData?.ConstructorTable?.Constructors || [];
   }
 
   /**
@@ -300,6 +345,49 @@ export class JolpicaClient {
         synced++;
       } catch (error) {
         errors.push(`Failed to sync driver ${driver.driverId}: ${error}`);
+      }
+    }
+
+    return { synced, errors };
+  }
+
+  /**
+   * Sync teams (constructors) for a season
+   */
+  async syncTeams(seasonYear: number): Promise<{ synced: number; errors: string[] }> {
+    const errors: string[] = [];
+    let synced = 0;
+
+    // Ensure season exists
+    const { seasonId } = await this.syncSeason(seasonYear);
+
+    // Fetch constructors from Jolpica
+    const constructors = await this.getConstructors(seasonYear);
+
+    for (const constructor of constructors) {
+      try {
+        await this.prisma.team.upsert({
+          where: {
+            seasonId_teamId: {
+              seasonId,
+              teamId: constructor.constructorId
+            }
+          },
+          update: {
+            name: constructor.name,
+            nationality: constructor.nationality,
+          },
+          create: {
+            seasonId,
+            teamId: constructor.constructorId,
+            name: constructor.name,
+            nationality: constructor.nationality,
+          }
+        });
+
+        synced++;
+      } catch (error) {
+        errors.push(`Failed to sync team ${constructor.constructorId}: ${error}`);
       }
     }
 

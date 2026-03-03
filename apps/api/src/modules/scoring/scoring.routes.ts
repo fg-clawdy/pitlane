@@ -67,6 +67,15 @@ export async function scoringRoutes(fastify: FastifyInstance) {
     );
   });
 
+  // Get league-specific driver standings (based on league's scoring type)
+  // GET /api/v1/leagues/:id/driver-standings
+  fastify.get('/leagues/:id/driver-standings', async (request, reply) => {
+    return controller.getLeagueDriverStandings(
+      request as any,
+      reply
+    );
+  });
+
   // Get member's race-by-race history
   // GET /api/v1/leagues/:id/members/:memberId/history
   fastify.get('/leagues/:id/members/:memberId/history', async (request, reply) => {

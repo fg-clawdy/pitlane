@@ -85,7 +85,7 @@ export default function LeagueSettingsPage() {
   const visibility = watch('visibility');
 
   useEffect(() => {
-    const storedToken = sessionStorage.getItem('token');
+    const storedToken = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
     if (!storedToken) {
       router.push('/login');
       return;

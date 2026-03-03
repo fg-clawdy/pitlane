@@ -10,6 +10,7 @@ export interface SyncResult {
   seasonId?: string;
   racesSynced: number;
   driversSynced: number;
+  teamsSynced: number;
   errors: string[];
 }
 
@@ -80,38 +81,95 @@ export class F1DataService {
   }
 
   /**
+   * Get the most recent active season year from database
+   * Falls back to previous years if current year doesn't exist
+   */
+  async getActiveSeasonYear(): Promise<number> {
+    const currentYear = this.getCurrentSeasonYear();
+    
+    // Check if current year exists in database
+    const currentSeason = await this.prisma.season.findUnique({
+      where: { year: currentYear }
+    });
+    
+    if (currentSeason) {
+      return currentYear;
+    }
+    
+    // Fall back to the most recent season in the database
+    const mostRecentSeason = await this.prisma.season.findFirst({
+      orderBy: { year: 'desc' }
+    });
+    
+    if (mostRecentSeason) {
+      console.log(`[F1DataService] Current year ${currentYear} not found, using ${mostRecentSeason.year}`);
+      return mostRecentSeason.year;
+    }
+    
+    // No seasons in database, return current year (will be created by sync)
+    return currentYear;
+  }
+
+  /**
    * Sync current season data (races and drivers)
    * Called on app startup
+   * Falls back to previous year if current year has no data
    */
   async syncCurrentSeason(): Promise<SyncResult> {
     const result: SyncResult = {
       racesSynced: 0,
       driversSynced: 0,
+      teamsSynced: 0,
       errors: []
     };
 
-    try {
-      const seasonYear = this.getCurrentSeasonYear();
+    const currentYear = this.getCurrentSeasonYear();
+    
+    // Try current year first, then fallback to previous years
+    const yearsToTry = [currentYear, currentYear - 1, currentYear - 2];
+    
+    for (const seasonYear of yearsToTry) {
+      try {
+        console.log(`[F1DataService] Attempting to sync season ${seasonYear}...`);
 
-      // Sync season
-      const seasonResult = await this.jolpica.syncSeason(seasonYear);
-      result.seasonId = seasonResult.seasonId;
+        // Sync season
+        const seasonResult = await this.jolpica.syncSeason(seasonYear);
+        result.seasonId = seasonResult.seasonId;
 
-      // Sync races
-      const racesResult = await this.jolpica.syncRaces(seasonYear);
-      result.racesSynced = racesResult.synced;
-      result.errors.push(...racesResult.errors);
+        // Sync races
+        const racesResult = await this.jolpica.syncRaces(seasonYear);
+        
+        // If no races were synced, this season likely doesn't exist yet
+        if (racesResult.synced === 0) {
+          console.log(`[F1DataService] No races found for ${seasonYear}, trying previous year...`);
+          continue;
+        }
+        
+        result.racesSynced = racesResult.synced;
+        result.errors.push(...racesResult.errors);
 
-      // Sync drivers
-      const driversResult = await this.jolpica.syncDrivers(seasonYear);
-      result.driversSynced = driversResult.synced;
-      result.errors.push(...driversResult.errors);
+        // Sync drivers
+        const driversResult = await this.jolpica.syncDrivers(seasonYear);
+        result.driversSynced = driversResult.synced;
+        result.errors.push(...driversResult.errors);
 
-      console.log(`[F1DataService] Synced season ${seasonYear}: ${result.racesSynced} races, ${result.driversSynced} drivers`);
-    } catch (error) {
-      result.errors.push(`Season sync failed: ${error}`);
+        // Sync teams
+        const teamsResult = await this.jolpica.syncTeams(seasonYear);
+        result.teamsSynced = teamsResult.synced;
+        result.errors.push(...teamsResult.errors);
+
+        console.log(`[F1DataService] Successfully synced season ${seasonYear}: ${result.racesSynced} races, ${result.driversSynced} drivers, ${result.teamsSynced} teams`);
+        return result;
+      } catch (error) {
+        console.warn(`[F1DataService] Failed to sync season ${seasonYear}: ${error}`);
+        result.errors.push(`Season ${seasonYear} sync failed: ${error}`);
+      }
     }
 
+    // If we get here, all years failed
+    result.errors.push(`Failed to sync any season data. Tried years: ${yearsToTry.join(', ')}`);
+    console.error(`[F1DataService] Failed to sync any season data`);
+    
     return result;
   }
 
@@ -122,6 +180,7 @@ export class F1DataService {
     const result: SyncResult = {
       racesSynced: 0,
       driversSynced: 0,
+      teamsSynced: 0,
       errors: []
     };
 
@@ -139,6 +198,11 @@ export class F1DataService {
       const driversResult = await this.jolpica.syncDrivers(year);
       result.driversSynced = driversResult.synced;
       result.errors.push(...driversResult.errors);
+
+      // Sync teams
+      const teamsResult = await this.jolpica.syncTeams(year);
+      result.teamsSynced = teamsResult.synced;
+      result.errors.push(...teamsResult.errors);
     } catch (error) {
       result.errors.push(`Season ${year} sync failed: ${error}`);
     }
@@ -409,6 +473,32 @@ export class F1DataService {
     });
 
     return season?.drivers || [];
+  }
+
+  /**
+   * Get teams for a season
+   */
+  async getTeams(seasonYear: number) {
+    const season = await this.prisma.season.findUnique({
+      where: { year: seasonYear },
+      include: {
+        teams: {
+          orderBy: { name: 'asc' }
+        }
+      }
+    });
+
+    return season?.teams || [];
+  }
+
+  /**
+   * Get all teams (constructors) across all seasons
+   */
+  async getAllTeams() {
+    // @ts-ignore - teams relation will exist after prisma generate
+    return this.prisma.team.findMany({
+      orderBy: { name: 'asc' }
+    });
   }
 
   /**
