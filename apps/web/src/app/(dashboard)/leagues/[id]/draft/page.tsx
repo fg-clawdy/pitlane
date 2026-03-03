@@ -210,7 +210,7 @@ export default function DraftBoardPage() {
 
   // Fetch draft state (for polling fallback)
   const fetchDraftState = useCallback(async () => {
-    const token = sessionStorage.getItem('token');
+    const token = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
     if (!token) return;
 
     try {
@@ -279,7 +279,7 @@ export default function DraftBoardPage() {
   const handleSubmitPick = async () => {
     if (!selectedDriver || !draft || !currentMemberId) return;
 
-    const token = sessionStorage.getItem('token');
+    const token = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
     if (!token) return;
 
     setSubmitting(true);

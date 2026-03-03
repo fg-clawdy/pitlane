@@ -48,7 +48,7 @@ export default function NotificationsPage() {
 
   // Get token from sessionStorage on client side only
   useEffect(() => {
-    setToken(sessionStorage.getItem('accessToken') || '');
+    setToken(sessionStorage.getItem('accessToken') || sessionStorage.getItem('token') || '');
   }, []);
 
   const fetchNotifications = useCallback(

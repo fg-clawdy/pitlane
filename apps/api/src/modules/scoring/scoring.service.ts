@@ -18,6 +18,7 @@ import {
   LeagueStandingsView,
   MemberRaceHistory,
   CurrentWeekDraftStatus,
+  LeagueDriverStanding,
 } from './types';
 
 export class ScoringService {

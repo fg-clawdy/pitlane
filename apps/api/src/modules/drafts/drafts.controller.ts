@@ -1,51 +1,82 @@
 /**
  * Drafts Controller
- * HTTP handlers for draft endpoints
+ * Handles draft-related HTTP endpoints
  */
 
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { DraftsService } from './drafts.service';
-import { CommissionerOverrideInput, CommissionerAssignPickInput, SubmitRedraftInput } from './types';
+import { z } from 'zod';
+import { PrismaClient } from '@prisma/client';
+import DraftsService from './drafts.service';
+import { 
+  submitPickSchema, 
+  setAutoDraftPreferencesSchema,
+  draftIdParamSchema,
+  leagueDraftsParamSchema,
+} from './drafts.dto';
+import { ApiError, ErrorCode, sendSuccess, sendError, getAuthenticatedUser, getOptionalUser } from '../../lib/api-response';
+import { auditAction } from '../../lib/audit';
+
+const prisma = new PrismaClient();
 
 export class DraftsController {
   private draftsService: DraftsService;
 
-  constructor(draftsService: DraftsService) {
-    this.draftsService = draftsService;
+  constructor(draftsService?: DraftsService) {
+    this.draftsService = draftsService || new DraftsService(prisma);
   }
-
-  /**
-   * Get all draft windows for a league
-   * GET /api/v1/leagues/:id/drafts
-   */
-  getLeagueDraftWindows = async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { id } = request.params as { id: string };
-      const windows = await this.draftsService.getLeagueDraftWindows(id);
-      return reply.send(windows);
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to get draft windows' });
-    }
-  };
 
   /**
    * Get current draft window for a league
    * GET /api/v1/leagues/:id/drafts/current
    */
-  getCurrentDraftWindow = async (request: FastifyRequest, reply: FastifyReply) => {
+  getCurrentDraftWindow = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
-      const { id } = request.params as { id: string };
-      const window = await this.draftsService.getCurrentDraftWindow(id);
-      
-      if (!window) {
-        return reply.code(404).send({ error: 'No active draft window found' });
-      }
-      
-      return reply.send(window);
+      const { id: leagueId } = request.params as { id: string };
+
+      const draftWindow = await this.draftsService.getCurrentDraftWindow(leagueId);
+
+      sendSuccess(reply, draftWindow);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to get current draft window' });
+      sendError(reply, error);
+    }
+  };
+
+  /**
+   * Get all draft windows for a league
+   * GET /api/v1/leagues/:id/drafts
+   */
+  getLeagueDraftWindows = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      const { id: leagueId } = request.params as { id: string };
+
+      const windows = await this.draftsService.getLeagueDraftWindows(leagueId);
+
+      sendSuccess(reply, windows);
+    } catch (error) {
+      request.log.error(error);
+      sendError(reply, error);
+    }
+  };
+
+  /**
+   * Get draft state for a draft window
+   * GET /api/v1/drafts/:draftId/state
+   */
+  getDraftState = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      const { draftId } = request.params as { draftId: string };
+
+      const state = await this.draftsService.getDraftState(draftId);
+
+      if (!state) {
+        throw ApiError.notFound('Draft window');
+      }
+
+      sendSuccess(reply, state);
+    } catch (error) {
+      request.log.error(error);
+      sendError(reply, error);
     }
   };
 
@@ -53,19 +84,20 @@ export class DraftsController {
    * Get draft window by ID
    * GET /api/v1/drafts/:draftId
    */
-  getDraftWindow = async (request: FastifyRequest, reply: FastifyReply) => {
+  getDraftWindow = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
       const { draftId } = request.params as { draftId: string };
+
       const window = await this.draftsService.getDraftWindow(draftId);
-      
+
       if (!window) {
-        return reply.code(404).send({ error: 'Draft window not found' });
+        throw ApiError.notFound('Draft window');
       }
-      
-      return reply.send(window);
+
+      sendSuccess(reply, window);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to get draft window' });
+      sendError(reply, error);
     }
   };
 
@@ -73,220 +105,201 @@ export class DraftsController {
    * Submit a draft pick
    * POST /api/v1/drafts/:draftId/picks
    */
-  submitPick = async (request: FastifyRequest, reply: FastifyReply) => {
+  submitPick = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
+      const user = getAuthenticatedUser(request);
       const { draftId } = request.params as { draftId: string };
-      const { leagueMemberId, driverId } = request.body as { leagueMemberId: string; driverId: string };
       
-      // Get user ID from auth
-      const userId = (request as any).user?.userId;
-      
-      if (!userId) {
-        return reply.code(401).send({ error: 'Not authenticated' });
+      // Validate input
+      if (!draftId) {
+        throw ApiError.badRequest('Draft ID is required');
       }
+      
+      const input = submitPickSchema.parse(request.body);
 
-      const result = await this.draftsService.submitPick({
+      // Ensure draftWindowId from params matches request body if provided
+      const pickInput = {
         draftWindowId: draftId,
-        leagueMemberId,
-        driverId,
-        userId,
-      });
+        leagueMemberId: input.leagueMemberId,
+        driverId: input.driverId,
+        userId: user.id,
+      };
+
+      const result = await this.draftsService.submitPick(pickInput);
 
       if (!result.success) {
-        return reply.code(400).send({ error: result.error });
+        throw ApiError.badRequest(result.error || 'Failed to submit pick');
       }
 
-      return reply.send(result.pick);
+      // Audit log
+      await auditAction(request, 'SUBMIT_DRAFT_PICK', 'DraftPick', result.pick?.id || '');
+
+      sendSuccess(reply, result.pick);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to submit pick' });
-    }
-  };
-
-  /**
-   * Get draft state
-   * GET /api/v1/drafts/:draftId/state
-   */
-  getDraftState = async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { draftId } = request.params as { draftId: string };
-      const state = await this.draftsService.getDraftState(draftId);
-      
-      if (!state) {
-        return reply.code(404).send({ error: 'Draft window not found' });
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
       }
-      
-      return reply.send(state);
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to get draft state' });
     }
   };
 
   /**
-   * Open scheduled draft windows (admin/system)
-   * POST /api/v1/admin/drafts/open-scheduled
+   * Validate a pick before submitting
+   * POST /api/v1/drafts/:draftId/validate-pick
    */
-  openScheduledDraftWindows = async (request: FastifyRequest, reply: FastifyReply) => {
+  validatePick = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
-      const result = await this.draftsService.openScheduledDraftWindows();
-      return reply.send(result);
+      const params = draftIdParamSchema.parse(request.params);
+      const input = submitPickSchema.parse(request.body);
+
+      const validation = await this.draftsService.validatePick(params.draftId, input.leagueMemberId, input.driverId);
+
+      sendSuccess(reply, validation);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to open draft windows' });
-    }
-  };
-
-  /**
-   * Close expired draft windows (admin/system)
-   * POST /api/v1/admin/drafts/close-expired
-   */
-  closeExpiredDraftWindows = async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const result = await this.draftsService.closeExpiredDraftWindows();
-      return reply.send(result);
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to close draft windows' });
-    }
-  };
-
-  /**
-   * Create draft windows for a race (admin/system)
-   * POST /api/v1/admin/drafts/create-for-race/:raceId
-   */
-  createDraftWindowsForRace = async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { raceId } = request.params as { raceId: string };
-      const result = await this.draftsService.createDraftWindowsForRace(raceId);
-      return reply.send(result);
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to create draft windows' });
-    }
-  };
-
-  /**
-   * Resolve missed pick (admin/system)
-   * POST /api/v1/admin/drafts/:draftId/resolve-missed/:leagueMemberId
-   */
-  resolveMissedPick = async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { draftId, leagueMemberId } = request.params as { draftId: string; leagueMemberId: string };
-      const result = await this.draftsService.resolveMissedPick(draftId, leagueMemberId);
-      
-      if (!result.success) {
-        return reply.code(400).send({ error: result.error });
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
       }
-      
-      return reply.send({ success: true });
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to resolve missed pick' });
     }
   };
 
   /**
-   * Get user's auto-draft preferences
+   * Get auto-draft preferences for current user
    * GET /api/v1/users/me/auto-draft-preferences
    */
-  getAutoDraftPreferences = async (request: FastifyRequest, reply: FastifyReply) => {
+  getAutoDraftPreferences = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
-      const userId = (request as any).user?.userId;
-      
-      if (!userId) {
-        return reply.code(401).send({ error: 'Not authenticated' });
-      }
+      const user = getAuthenticatedUser(request);
 
-      const preferences = await this.draftsService.getAutoDraftPreferences(userId);
-      return reply.send(preferences);
+      const preferences = await this.draftsService.getAutoDraftPreferences(user.id);
+
+      sendSuccess(reply, preferences);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to get auto-draft preferences' });
+      sendError(reply, error);
     }
   };
 
   /**
-   * Set user's auto-draft preferences
+   * Set auto-draft preferences for current user
    * PUT /api/v1/users/me/auto-draft-preferences
    */
-  setAutoDraftPreferences = async (request: FastifyRequest, reply: FastifyReply) => {
+  setAutoDraftPreferences = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
-      const userId = (request as any).user?.userId;
-      
-      if (!userId) {
-        return reply.code(401).send({ error: 'Not authenticated' });
-      }
+      const user = getAuthenticatedUser(request);
+      const input = setAutoDraftPreferencesSchema.parse(request.body);
 
-      const { preferences } = request.body as { preferences: Array<{ driverId: string; rank: number }> };
+      const result = await this.draftsService.setAutoDraftPreferences(user.id, input);
 
-      if (!preferences || !Array.isArray(preferences)) {
-        return reply.code(400).send({ error: 'Preferences array is required' });
-      }
-
-      const result = await this.draftsService.setAutoDraftPreferences(userId, { preferences });
-      return reply.send(result);
+      await auditAction(request, 'SET_AUTO_DRAFT_PREFERENCES', 'AutoDraftPrefs', user.id);
+      sendSuccess(reply, result);
     } catch (error) {
       request.log.error(error);
-      const message = error instanceof Error ? error.message : 'Failed to set auto-draft preferences';
-      return reply.code(400).send({ error: message });
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
+      }
     }
   };
 
   /**
-   * Commissioner override: Reassign a draft pick to a different driver
-   * PATCH /api/v1/drafts/:draftId/picks/:pickId/override
+   * Get active redraft windows for current user
+   * GET /api/v1/users/me/redraft-windows
    */
-  commissionerOverridePick = async (request: FastifyRequest, reply: FastifyReply) => {
+  getActiveRedraftWindows = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
-      const { draftId, pickId } = request.params as { draftId: string; pickId: string };
-      const { newDriverId } = request.body as CommissionerOverrideInput;
-      
-      const userId = (request as any).user?.userId;
-      
-      if (!userId) {
-        return reply.code(401).send({ error: 'Not authenticated' });
+      const user = getAuthenticatedUser(request);
+
+      const redrafts = await this.draftsService.getActiveRedraftWindows(user.id);
+
+      sendSuccess(reply, redrafts);
+    } catch (error) {
+      request.log.error(error);
+      sendError(reply, error);
+    }
+  };
+
+  /**
+   * Submit a redraft pick
+   * POST /api/v1/substitutions/:substitutionId/redraft
+   */
+  submitRedraftPick = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      const user = getAuthenticatedUser(request);
+      const { substitutionId } = request.params as { substitutionId: string };
+      const { leagueMemberId, newDriverId } = request.body as { leagueMemberId: string; newDriverId: string };
+
+      if (!leagueMemberId || !newDriverId) {
+        throw ApiError.badRequest('leagueMemberId and newDriverId are required');
       }
 
+      const result = await this.draftsService.submitRedraftPick(
+        substitutionId,
+        leagueMemberId,
+        newDriverId,
+        user.id
+      );
+
+      if (!result.success) {
+        throw ApiError.badRequest(result.error || 'Failed to submit redraft');
+      }
+
+      sendSuccess(reply, { message: 'Redraft submitted successfully' });
+    } catch (error) {
+      request.log.error(error);
+      sendError(reply, error);
+    }
+  };
+
+  /**
+   * Commissioner: Override a draft pick
+   * PATCH /api/v1/drafts/:draftId/picks/:pickId/override
+   */
+  commissionerOverridePick = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      const user = getAuthenticatedUser(request);
+      const { draftId, pickId } = request.params as { draftId: string; pickId: string };
+      const { newDriverId } = request.body as { newDriverId: string };
+
       if (!newDriverId) {
-        return reply.code(400).send({ error: 'newDriverId is required' });
+        throw ApiError.badRequest('newDriverId is required');
       }
 
       const result = await this.draftsService.commissionerOverridePick(
         draftId,
         pickId,
         newDriverId,
-        userId
+        user.id
       );
 
       if (!result.success) {
-        return reply.code(400).send({ error: result.error });
+        throw ApiError.badRequest(result.error || 'Failed to override pick');
       }
 
-      return reply.send(result.pick);
+      sendSuccess(reply, result.pick);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to override pick' });
+      sendError(reply, error);
     }
   };
 
   /**
-   * Commissioner override: Assign a driver to a member who missed a pick
+   * Commissioner: Assign a missed pick
    * POST /api/v1/drafts/:draftId/assign-pick
    */
-  commissionerAssignPick = async (request: FastifyRequest, reply: FastifyReply) => {
+  commissionerAssignMissedPick = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
+      const user = getAuthenticatedUser(request);
       const { draftId } = request.params as { draftId: string };
-      const { leagueMemberId, round, driverId } = request.body as CommissionerAssignPickInput;
-      
-      const userId = (request as any).user?.userId;
-      
-      if (!userId) {
-        return reply.code(401).send({ error: 'Not authenticated' });
-      }
+      const { leagueMemberId, round, driverId } = request.body as { leagueMemberId: string; round: number; driverId: string };
 
       if (!leagueMemberId || !round || !driverId) {
-        return reply.code(400).send({ error: 'leagueMemberId, round, and driverId are required' });
+        throw ApiError.badRequest('leagueMemberId, round, and driverId are required');
       }
 
       const result = await this.draftsService.commissionerAssignMissedPick(
@@ -294,121 +307,115 @@ export class DraftsController {
         leagueMemberId,
         round,
         driverId,
-        userId
+        user.id
       );
 
       if (!result.success) {
-        return reply.code(400).send({ error: result.error });
+        throw ApiError.badRequest(result.error || 'Failed to assign missed pick');
       }
 
-      return reply.send(result.pick);
+      sendSuccess(reply, result.pick);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to assign pick' });
+      sendError(reply, error);
     }
   };
 
-  // ========== DRIVER SUBSTITUTION HANDLERS (US-014) ==========
+  /**
+   * Admin: Resolve missed pick
+   * POST /api/v1/admin/drafts/:draftId/resolve-missed/:leagueMemberId
+   */
+  resolveMissedPick = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      const { draftId, leagueMemberId } = request.params as { draftId: string; leagueMemberId: string };
+
+      if (!leagueMemberId) {
+        throw ApiError.badRequest('leagueMemberId is required');
+      }
+
+      const result = await this.draftsService.resolveMissedPick(draftId, leagueMemberId);
+
+      if (!result.success) {
+        throw ApiError.badRequest(result.error || 'Failed to resolve missed pick');
+      }
+
+      sendSuccess(reply, { message: 'Missed pick resolved successfully' });
+    } catch (error) {
+      request.log.error(error);
+      sendError(reply, error);
+    }
+  };
 
   /**
-   * Process a driver substitution (admin/system)
+   * Admin: Create draft windows for a race
+   * POST /api/v1/admin/drafts/create-for-race/:raceId
+   */
+  createDraftWindowsForRace = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    try {
+      const { raceId } = request.params as { raceId: string };
+
+      const result = await this.draftsService.createDraftWindowsForRace(raceId);
+
+      if (result.errors.length > 0) {
+        request.log.error({ errors: result.errors }, 'Errors creating draft windows');
+      }
+
+      sendSuccess(reply, result);
+    } catch (error) {
+      request.log.error(error);
+      sendError(reply, error);
+    }
+  };
+
+  /**
+   * Admin: Process driver substitution
    * POST /api/v1/admin/substitutions/:substitutionId/process
    */
-  processDriverSubstitution = async (request: FastifyRequest, reply: FastifyReply) => {
+  processDriverSubstitution = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
       const { substitutionId } = request.params as { substitutionId: string };
+
       const result = await this.draftsService.processDriverSubstitution(substitutionId);
 
       if (!result.success) {
-        return reply.code(400).send({ error: result.error });
+        throw ApiError.badRequest(result.error || 'Failed to process substitution');
       }
 
-      return reply.send({ 
-        success: true, 
-        affectedPicks: result.impacts?.length || 0,
-        impacts: result.impacts 
-      });
+      sendSuccess(reply, result);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to process substitution' });
+      sendError(reply, error);
     }
   };
 
   /**
-   * Get active redraft windows for the current user
-   * GET /api/v1/users/me/redraft-windows
+   * Admin: Open scheduled draft windows
+   * POST /api/v1/admin/drafts/open-scheduled
    */
-  getActiveRedraftWindows = async (request: FastifyRequest, reply: FastifyReply) => {
+  openScheduledDraftWindows = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
-      const userId = (request as any).user?.userId;
-      
-      if (!userId) {
-        return reply.code(401).send({ error: 'Not authenticated' });
-      }
-
-      const windows = await this.draftsService.getActiveRedraftWindows(userId);
-      return reply.send({ windows });
+      const result = await this.draftsService.openScheduledDraftWindows();
+      sendSuccess(reply, result);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to get redraft windows' });
+      sendError(reply, error);
     }
   };
 
   /**
-   * Submit a redraft pick (player selects new driver after substitution)
-   * POST /api/v1/substitutions/:substitutionId/redraft
+   * Admin: Close expired draft windows
+   * POST /api/v1/admin/drafts/close-expired
    */
-  submitRedraftPick = async (request: FastifyRequest, reply: FastifyReply) => {
+  closeExpiredDraftWindows = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     try {
-      const { substitutionId } = request.params as { substitutionId: string };
-      const { leagueMemberId, newDriverId } = request.body as SubmitRedraftInput;
-      
-      const userId = (request as any).user?.userId;
-      
-      if (!userId) {
-        return reply.code(401).send({ error: 'Not authenticated' });
-      }
-
-      if (!leagueMemberId || !newDriverId) {
-        return reply.code(400).send({ error: 'leagueMemberId and newDriverId are required' });
-      }
-
-      const result = await this.draftsService.submitRedraftPick(
-        substitutionId,
-        leagueMemberId,
-        newDriverId,
-        userId
-      );
-
-      if (!result.success) {
-        return reply.code(400).send({ error: result.error });
-      }
-
-      return reply.send({ success: true });
+      const result = await this.draftsService.closeExpiredDraftWindows();
+      sendSuccess(reply, result);
     } catch (error) {
       request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to submit redraft' });
+      sendError(reply, error);
     }
   };
 
-  /**
-   * Get substitution impact for a draft window
-   * GET /api/v1/drafts/:draftId/substitutions/:substitutionId/impact
-   */
-  getSubstitutionImpact = async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { draftId, substitutionId } = request.params as { 
-        draftId: string; 
-        substitutionId: string; 
-      };
-
-      const result = await this.draftsService.getSubstitutionImpactForDraft(draftId, substitutionId);
-      return reply.send(result);
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Failed to get substitution impact' });
-    }
-  };
 }
 
 export default DraftsController;

@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { ApiError } from '../../lib/api-response';
 import { 
   CreateLeagueInput, 
   LeagueResponse, 
@@ -29,7 +30,7 @@ export class LeaguesService {
   async createLeague(userId: string, input: CreateLeagueInput): Promise<LeagueResponse> {
     // Validate league name length
     if (input.name.length < 3 || input.name.length > 80) {
-      throw new Error('League name must be between 3 and 80 characters');
+      throw ApiError.badRequest('League name must be between 3 and 80 characters');
     }
 
     // Check if league name is unique for this season
@@ -43,13 +44,13 @@ export class LeaguesService {
     });
 
     if (existingLeague) {
-      throw new Error('League name already exists for this season');
+      throw ApiError.conflict('League name already exists for this season');
     }
 
     // Validate max players (2-11 players per PRD)
     const maxPlayers = input.maxPlayers ?? 11;
     if (maxPlayers < 2 || maxPlayers > 11) {
-      throw new Error('Max players must be between 2 and 11');
+      throw ApiError.badRequest('Max players must be between 2 and 11');
     }
 
     // Check user's current league count (max 10 leagues per user)
@@ -61,7 +62,7 @@ export class LeaguesService {
     });
 
     if (userLeagueCount >= 10) {
-      throw new Error('You have reached the maximum of 10 leagues');
+      throw ApiError.badRequest('You have reached the maximum of 10 leagues');
     }
 
     // Validate season exists
@@ -70,7 +71,7 @@ export class LeaguesService {
     });
 
     if (!season) {
-      throw new Error('Season not found');
+      throw ApiError.notFound('Season');
     }
 
     // Create league with user as first member (commissioner)
@@ -278,22 +279,9 @@ export class LeaguesService {
 
   /**
    * Join a league directly (public leagues or via invite link)
+   * Uses transaction to prevent race condition on league full check
    */
   async joinLeague(leagueId: string, userId: string, input: JoinLeagueInput): Promise<JoinViaInviteResponse> {
-    // Get the league with members
-    const league = await this.prisma.league.findUnique({
-      where: { id: leagueId },
-      include: {
-        members: {
-          where: { leftAt: null },
-        },
-      },
-    });
-
-    if (!league) {
-      throw new Error('League not found');
-    }
-
     // Check if user is already a member
     const existingMembership = await this.prisma.leagueMember.findUnique({
       where: {
@@ -305,12 +293,7 @@ export class LeaguesService {
     });
 
     if (existingMembership && !existingMembership.leftAt) {
-      throw new Error('You are already a member of this league');
-    }
-
-    // Check if league is full
-    if (league.members.length >= league.maxPlayers) {
-      throw new Error('League is full');
+      throw ApiError.alreadyMember();
     }
 
     // Check user's current league count (max 10 leagues per user)
@@ -322,12 +305,26 @@ export class LeaguesService {
     });
 
     if (userLeagueCount >= 10) {
-      throw new Error('You have reached the maximum of 10 leagues');
+      throw ApiError.badRequest('You have reached the maximum of 10 leagues');
+    }
+
+    // Get the league
+    const league = await this.prisma.league.findUnique({
+      where: { id: leagueId },
+      include: {
+        members: {
+          where: { leftAt: null },
+        },
+      },
+    });
+
+    if (!league) {
+      throw ApiError.notFound('League');
     }
 
     // Validate team name
     if (input.teamName.length < 1 || input.teamName.length > 50) {
-      throw new Error('Team name must be between 1 and 50 characters');
+      throw ApiError.badRequest('Team name must be between 1 and 50 characters');
     }
 
     // Check team name uniqueness within league
@@ -340,7 +337,7 @@ export class LeaguesService {
     });
 
     if (existingTeamName) {
-      throw new Error('Team name already taken in this league');
+      throw ApiError.conflict('Team name already taken in this league');
     }
 
     // Check if season allows joining (no more than 3 races completed)
@@ -358,7 +355,7 @@ export class LeaguesService {
     const maxCutoff = cutoffSetting ? (cutoffSetting.value as { value: number }).value : 3;
 
     if (completedRaces >= maxCutoff) {
-      throw new Error('Cannot join league mid-season after 3rd race completed');
+      throw ApiError.badRequest('Cannot join league mid-season after 3rd race completed');
     }
 
     // If join approval required, create a join request instead
@@ -373,7 +370,7 @@ export class LeaguesService {
       });
 
       if (existingRequest && existingRequest.status === 'pending') {
-        throw new Error('You already have a pending join request for this league');
+        throw ApiError.conflict('You already have a pending join request for this league');
       }
 
       // Create or update join request
@@ -412,14 +409,36 @@ export class LeaguesService {
       };
     }
 
-    // Direct join (no approval required)
-    await this.prisma.leagueMember.create({
-      data: {
-        leagueId,
-        userId,
-        teamName: input.teamName,
-      },
-    });
+    // Direct join (no approval required) - use transaction to prevent race condition
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Check league member count within transaction
+        const currentMemberCount = await tx.leagueMember.count({
+          where: {
+            leagueId,
+            leftAt: null,
+          },
+        });
+
+        if (currentMemberCount >= league.maxPlayers) {
+          throw ApiError.leagueFull();
+        }
+
+        // Create member
+        await tx.leagueMember.create({
+          data: {
+            leagueId,
+            userId,
+            teamName: input.teamName,
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'League is full') {
+        throw error;
+      }
+      throw error;
+    }
 
     const leagueResponse = await this.getLeagueById(leagueId, userId);
     return {
@@ -449,23 +468,23 @@ export class LeaguesService {
     });
 
     if (!inviteLink) {
-      throw new Error('Invalid invite link');
+      throw ApiError.badRequest('Invalid invite link');
     }
 
     // Check if invite link is expired
     if (new Date() > inviteLink.expiresAt) {
-      throw new Error('Invite link has expired');
+      throw ApiError.badRequest('Invite link has expired');
     }
 
     // Check if invite link has reached max uses
     if (inviteLink.maxUses !== null && inviteLink.uses.length >= inviteLink.maxUses) {
-      throw new Error('Invite link has reached maximum uses');
+      throw ApiError.badRequest('Invite link has reached maximum uses');
     }
 
     // Check if user already used this invite link
     const alreadyUsed = inviteLink.uses.some((use) => use.userId === userId);
     if (alreadyUsed) {
-      throw new Error('You have already used this invite link');
+      throw ApiError.conflict('You have already used this invite link');
     }
 
     // Join the league

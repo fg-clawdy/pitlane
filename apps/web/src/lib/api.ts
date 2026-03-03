@@ -7,6 +7,19 @@ interface ApiOptions {
   token?: string;
 }
 
+/**
+ * Standard API response wrapper from backend
+ */
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+}
+
 export class ApiError extends Error {
   public readonly isNetworkError: boolean;
   public readonly statusCode?: number;
@@ -64,8 +77,17 @@ export async function api<T>(
     );
   }
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'An error occurred' }));
+  // Parse the response JSON
+  let responseData: ApiResponse<T>;
+  try {
+    responseData = await response.json();
+  } catch {
+    throw new ApiError('Failed to parse server response', false, response.status);
+  }
+
+  // Handle error responses
+  if (!response.ok || !responseData.success) {
+    const errorMessage = responseData.error?.message || 'API request failed';
     
     // Handle authentication errors - redirect to login only if a token was provided
     // (don't redirect if no token was sent, as that's a different issue)
@@ -81,13 +103,14 @@ export async function api<T>(
     }
     
     throw new ApiError(
-      error.error || error.message || 'API request failed',
+      errorMessage,
       false,
       response.status
     );
   }
 
-  return response.json();
+  // Unwrap the response - backend returns { success: true, data: ... }
+  return responseData.data as T;
 }
 
 // Notification types matching backend
@@ -666,6 +689,8 @@ export interface LeagueDriverStanding {
 }
 
 // ========== PUBLIC F1 DATA API FUNCTIONS ==========
+
+// Note: The api() function now automatically unwraps { success: true, data: ... } responses
 
 export async function getSeasons(): Promise<Season[]> {
   return api<Season[]>('/seasons');

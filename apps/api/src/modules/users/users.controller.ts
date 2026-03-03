@@ -1,4 +1,10 @@
+/**
+ * Users Controller
+ * Handles user profile and settings endpoints
+ */
+
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import {
   getUserProfile,
   updateUserProfile,
@@ -12,258 +18,264 @@ import {
   verifyEmailChange
 } from './users.service';
 import { UpdateProfileDto, ChangePasswordDto, PushSubscriptionDto, EmailChangeRequestDto } from './types';
+import { ApiError, ErrorCode, sendSuccess, sendError, getAuthenticatedUser } from '../../lib/api-response';
+import {
+  updateProfileSchema,
+  changePasswordSchema,
+  pushSubscriptionSchema,
+  emailChangeRequestSchema,
+  verifyEmailChangeSchema,
+} from './users.dto';
 
-// VAPID public key endpoint - returns the public key for frontend push subscription
+/**
+ * Get VAPID public key for push notifications
+ * GET /api/v1/users/vapid-public-key
+ */
 export async function getVapidPublicKeyHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  if (!publicKey) {
-    reply.status(503).send({ error: 'Push notifications not configured' });
-    return;
+  try {
+    const publicKey = process.env.VAPID_PUBLIC_KEY;
+    if (!publicKey) {
+      throw ApiError.serviceUnavailable('Push notifications not configured');
+    }
+
+    sendSuccess(reply, { publicKey });
+  } catch (error) {
+    request.log.error(error);
+    sendError(reply, error);
   }
-  reply.status(200).send({ publicKey });
 }
 
+/**
+ * Get current user profile
+ * GET /api/v1/users/me
+ */
 export async function getMeHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
     const profile = await getUserProfile(user.id);
     if (!profile) {
-      reply.status(400).send({ error: 'User not found' });
-      return;
+      throw ApiError.notFound('User');
     }
 
-    reply.status(200).send(profile);
+    sendSuccess(reply, profile);
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(500).send({ error: error.message });
-    } else {
-      reply.status(500).send({ error: 'Internal server error' });
-    }
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
+/**
+ * Update current user profile
+ * PATCH /api/v1/users/me
+ */
 export async function updateMeHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
-    const dto = request.body as UpdateProfileDto;
+    const dto = updateProfileSchema.parse(request.body);
     const profile = await updateUserProfile(user.id, dto);
 
-    reply.status(200).send(profile);
+    sendSuccess(reply, profile);
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
+    request.log.error(error);
+    if (error instanceof z.ZodError) {
+      sendError(reply, ApiError.validationError(error.errors));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
 
+/**
+ * Change password
+ * POST /api/v1/users/me/change-password
+ */
 export async function changePasswordHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
-    const dto = request.body as ChangePasswordDto;
+    const dto = changePasswordSchema.parse(request.body);
     await changePassword(user.id, dto);
 
-    reply.status(200).send({ message: 'Password changed successfully' });
+    sendSuccess(reply, { message: 'Password changed successfully' });
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
+    request.log.error(error);
+    if (error instanceof z.ZodError) {
+      sendError(reply, ApiError.validationError(error.errors));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
 
+/**
+ * Add push subscription for notifications
+ * POST /api/v1/users/me/push-subscriptions
+ */
 export async function addPushSubscriptionHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
-    const dto = request.body as PushSubscriptionDto;
+    const dto = pushSubscriptionSchema.parse(request.body);
     await addPushSubscription(user.id, dto);
 
-    reply.status(200).send({ message: 'Push subscription added' });
+    sendSuccess(reply, { message: 'Push subscription added' });
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
+    request.log.error(error);
+    if (error instanceof z.ZodError) {
+      sendError(reply, ApiError.validationError(error.errors));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
 
+/**
+ * Remove push subscription
+ * DELETE /api/v1/users/me/push-subscriptions
+ */
 export async function removePushSubscriptionHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
     const endpoint = (request.query as { endpoint: string }).endpoint;
+    if (!endpoint) {
+      throw ApiError.badRequest('endpoint is required');
+    }
+
     await removePushSubscription(user.id, endpoint);
 
-    reply.status(200).send({ message: 'Push subscription removed' });
+    sendSuccess(reply, { message: 'Push subscription removed' });
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
-    } else {
-      reply.status(500).send({ error: 'Internal server error' });
-    }
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
-// Email change handlers
+/**
+ * Request email change
+ * POST /api/v1/users/me/email-change/request
+ */
 export async function requestEmailChangeHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
-    const dto = request.body as EmailChangeRequestDto;
+    const dto = emailChangeRequestSchema.parse(request.body);
     const result = await requestEmailChange(user.id, dto);
 
-    // In development, return the token for testing
-    const isDev = process.env.NODE_ENV !== 'production';
-    reply.status(200).send({
-      ...result,
-      ...(isDev && { _token: (await import('crypto').then(c => c.randomBytes(32).toString('hex'))) })
-    });
+    sendSuccess(reply, result);
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
+    request.log.error(error);
+    if (error instanceof z.ZodError) {
+      sendError(reply, ApiError.validationError(error.errors));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
 
+/**
+ * Get email change status
+ * GET /api/v1/users/me/email-change/status
+ */
 export async function getEmailChangeStatusHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
     const status = await getEmailChangeStatus(user.id);
-    reply.status(200).send(status);
+
+    sendSuccess(reply, status);
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(500).send({ error: error.message });
-    } else {
-      reply.status(500).send({ error: 'Internal server error' });
-    }
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
+/**
+ * Cancel email change
+ * POST /api/v1/users/me/email-change/cancel
+ */
 export async function cancelEmailChangeHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
     await cancelEmailChange(user.id);
-    reply.status(200).send({ message: 'Email change cancelled' });
+
+    sendSuccess(reply, { message: 'Email change cancelled' });
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
-    } else {
-      reply.status(500).send({ error: 'Internal server error' });
-    }
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
+/**
+ * Waive hold period for email change
+ * POST /api/v1/users/me/email-change/waive-hold
+ */
 export async function waiveHoldEmailChangeHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
     await waiveHoldEmailChange(user.id);
-    reply.status(200).send({ message: 'Hold period waived' });
+
+    sendSuccess(reply, { message: 'Hold period waived' });
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
-    } else {
-      reply.status(500).send({ error: 'Internal server error' });
-    }
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
+/**
+ * Verify email change with token
+ * GET /api/v1/users/me/email-change/verify
+ */
 export async function verifyEmailChangeHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const { token } = request.query as { token: string };
-    
-    if (!token) {
-      reply.status(400).send({ error: 'Token is required' });
-      return;
-    }
+    const query = verifyEmailChangeSchema.parse(request.query);
 
-    await verifyEmailChange(token);
-    reply.status(200).send({ message: 'Email changed successfully' });
+    await verifyEmailChange(query.token);
+
+    sendSuccess(reply, { message: 'Email changed successfully' });
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
+    request.log.error(error);
+    if (error instanceof z.ZodError) {
+      sendError(reply, ApiError.validationError(error.errors));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }

@@ -4,6 +4,7 @@
  */
 
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import {
   getNotifications,
   getUnreadCount,
@@ -11,6 +12,12 @@ import {
   markAllAsRead,
 } from './notifications.service';
 import { NotificationType } from './notifications.types';
+import { ApiError, ErrorCode, sendSuccess, sendError, getAuthenticatedUser } from '../../lib/api-response';
+import {
+  getNotificationsQuerySchema,
+  markAsReadSchema,
+  markAllAsReadSchema,
+} from './notifications.dto';
 
 // Request types
 interface GetNotificationsQuery {
@@ -32,29 +39,25 @@ export async function getNotificationsHandler(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
-    const query = request.query as GetNotificationsQuery;
-    const { page, limit, unreadOnly, type } = query;
+    const query = getNotificationsQuerySchema.parse(request.query);
 
     const result = await getNotifications({
       userId: user.id,
-      page,
-      limit,
-      unreadOnly,
-      type,
+      page: query.page,
+      limit: query.limit,
+      unreadOnly: query.unreadOnly,
+      type: query.type,
     });
 
-    reply.status(200).send(result);
+    sendSuccess(reply, result);
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(500).send({ error: error.message });
+    request.log.error(error);
+    if (error instanceof z.ZodError) {
+      sendError(reply, ApiError.validationError(error.errors));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
@@ -67,21 +70,14 @@ export async function getUnreadCountHandler(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
     const count = await getUnreadCount(user.id);
 
-    reply.status(200).send({ count });
+    sendSuccess(reply, { count });
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(500).send({ error: error.message });
-    } else {
-      reply.status(500).send({ error: 'Internal server error' });
-    }
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -93,23 +89,19 @@ export async function markAsReadHandler(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
-    const params = request.params as MarkAsReadParams;
-    const { notificationId } = params;
+    const params = markAsReadSchema.parse(request.params);
 
-    await markAsRead({ userId: user.id, notificationId });
+    await markAsRead({ userId: user.id, notificationId: params.notificationId });
 
-    reply.status(200).send({ success: true });
+    sendSuccess(reply, { message: 'Notification marked as read' });
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
+    request.log.error(error);
+    if (error instanceof z.ZodError) {
+      sendError(reply, ApiError.validationError(error.errors));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
@@ -122,20 +114,13 @@ export async function markAllAsReadHandler(
   reply: FastifyReply
 ): Promise<void> {
   try {
-    const user = (request as any).user;
-    if (!user) {
-      reply.status(401).send({ error: 'Not authenticated' });
-      return;
-    }
+    const user = getAuthenticatedUser(request);
 
     await markAllAsRead({ userId: user.id });
 
-    reply.status(200).send({ success: true });
+    sendSuccess(reply, { message: 'All notifications marked as read' });
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
-    } else {
-      reply.status(500).send({ error: 'Internal server error' });
-    }
+    request.log.error(error);
+    sendError(reply, error);
   }
 }

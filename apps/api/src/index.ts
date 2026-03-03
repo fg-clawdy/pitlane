@@ -16,6 +16,7 @@ import { adminRoutes } from './modules/admin/admin.routes';
 import { F1DataService } from './modules/f1data/f1data.service';
 import { seedDefaultSystemSettings } from './modules/admin/admin.service';
 import { PrismaClient } from '@prisma/client';
+import { ApiError, ErrorCode } from './lib/api-response';
 
 const prisma = new PrismaClient();
 const f1dataService = new F1DataService(prisma);
@@ -42,6 +43,30 @@ fastify.register(require('@fastify/cors'), {
 // Register cookie support
 fastify.register(require('@fastify/cookie'), {
   secret: process.env.COOKIE_SECRET || 'pitlane-cookie-secret',
+});
+
+// Register global error handler
+fastify.setErrorHandler((error, _request, reply) => {
+  if (error instanceof ApiError) {
+    reply.code(error.statusCode).send({
+      success: false,
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+      },
+    });
+  } else {
+    // Default error handling
+    const statusCode = error.statusCode ?? 500;
+    reply.code(statusCode).send({
+      success: false,
+      error: {
+        code: ErrorCode.INTERNAL_ERROR,
+        message: error.message || 'Internal server error',
+      },
+    });
+  }
 });
 
 // Register routes under /api/v1

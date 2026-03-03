@@ -74,7 +74,7 @@ export default function MembersManagementPage() {
   const [newLinkExpires, setNewLinkExpires] = useState('7');
 
   useEffect(() => {
-    const storedToken = sessionStorage.getItem('token');
+    const storedToken = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
     if (!storedToken) {
       router.push('/login');
       return;

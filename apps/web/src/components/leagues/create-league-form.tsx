@@ -86,8 +86,8 @@ export function CreateLeagueForm() {
     setIsLoading(true);
     setError(null);
 
-    try {
-      const token = sessionStorage.getItem('accessToken');
+  try {
+      const token = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
       if (!token) {
         router.push('/login');
         return;
@@ -134,7 +134,7 @@ export function CreateLeagueForm() {
         return;
       }
 
-      const response = await api<{ league: { id: string } }>(
+      const response = await api<{ id: string }>(
         '/leagues',
         {
           method: 'POST',
@@ -154,7 +154,7 @@ export function CreateLeagueForm() {
         }
       );
 
-      router.push(`/leagues/${response.league.id}`);
+      router.push(`/leagues/${response.id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create league';
       setError(message);

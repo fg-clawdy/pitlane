@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { ApiError } from '../../lib/api-response';
 import {
   DraftStatus,
   DraftType,
@@ -374,13 +375,7 @@ export class DraftsService {
         return { success: false, error: 'Invalid league member' };
       }
 
-      // Validate the pick
-      const validation = await this.validatePick(draftWindowId, leagueMemberId, driverId);
-      if (!validation.isValid) {
-        return { success: false, error: validation.error };
-      }
-
-      // Determine round and pick order
+      // Get draft order and state
       const draftOrder = await this.getDraftOrder(draftWindowId);
       const state = this.calculateDraftState(window, draftOrder);
 
@@ -393,22 +388,72 @@ export class DraftsService {
       const memberOrder = draftOrder.find(o => o.leagueMemberId === leagueMemberId);
       const pickOrder = currentRound === 1 ? memberOrder?.round1PickOrder : memberOrder?.round2PickOrder;
 
-      // Create the pick
-      const pick = await this.prisma.draftPick.create({
-        data: {
-          draftWindowId,
-          leagueMemberId,
-          driverId,
-          round: currentRound,
-          pickOrder: pickOrder || 0,
-          resolutionMethod: 'manual',
-          submittedAt: new Date(),
-        },
-        include: {
-          driver: true,
-          leagueMember: true,
-        },
-      });
+      // Use transaction to prevent race condition on driver pick
+      let pick: any;
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          // Check if driver exists and belongs to the correct season
+          const driver = await tx.driver.findUnique({
+            where: { id: driverId },
+          });
+
+          if (!driver) {
+            throw ApiError.notFound('Driver');
+          }
+
+          // Verify driver belongs to this league's season
+          if (driver.seasonId !== window.league.seasonId) {
+            throw ApiError.badRequest('Driver is not from this season');
+          }
+
+          // Check if driver was already picked in this draft window (within transaction)
+          const existingPick = await tx.draftPick.findFirst({
+            where: {
+              draftWindowId,
+              driverId,
+            },
+          });
+
+          if (existingPick) {
+            throw ApiError.driverAlreadyPicked();
+          }
+
+          // Check if member already has a pick in this round
+          const memberPicksInRound = await tx.draftPick.count({
+            where: {
+              draftWindowId,
+              leagueMemberId,
+              round: currentRound,
+            },
+          });
+
+          if (memberPicksInRound > 0) {
+            throw ApiError.notYourTurn('You already have a pick in this round');
+          }
+
+          // Create the pick
+          pick = await tx.draftPick.create({
+            data: {
+              draftWindowId,
+              leagueMemberId,
+              driverId,
+              round: currentRound,
+              pickOrder: pickOrder || 0,
+              resolutionMethod: 'manual',
+              submittedAt: new Date(),
+            },
+            include: {
+              driver: true,
+              leagueMember: true,
+            },
+          });
+        });
+      } catch (txError) {
+        if (txError instanceof Error) {
+          return { success: false, error: txError.message };
+        }
+        return { success: false, error: 'Failed to submit pick due to transaction error' };
+      }
 
       // Get updated state after pick
       const updatedWindow = await this.prisma.draftWindow.findUnique({

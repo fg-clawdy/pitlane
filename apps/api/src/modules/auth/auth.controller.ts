@@ -1,7 +1,22 @@
+/**
+ * Auth Controller
+ * Handles authentication endpoints
+ */
+
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { login, refreshAccessToken, logout, register, verifyEmail, forgotPassword, resetPassword, resendVerification } from './auth.service';
-import { loginSchema } from './login.dto';
 import { z } from 'zod';
+import {
+  login,
+  refreshAccessToken,
+  logout,
+  register,
+  verifyEmail,
+  forgotPassword,
+  resetPassword,
+  resendVerification,
+} from './auth.service';
+import { loginSchema } from './login.dto';
+import { ApiError, sendSuccess, sendError } from '../../lib/api-response';
 
 // Request body schemas
 const registerSchema = z.object({
@@ -30,14 +45,13 @@ export async function registerHandler(
   try {
     const dto = registerSchema.parse(request.body);
     const result = await register(dto);
-    reply.status(201).send(result);
+    sendSuccess(reply, result, 201);
   } catch (error) {
+    request.log.error(error);
     if (error instanceof z.ZodError) {
-      reply.status(400).send({ error: 'Validation failed', details: error.errors });
-    } else if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
+      sendError(reply, ApiError.validationError(error.errors));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
@@ -70,12 +84,15 @@ export async function loginHandler(
     });
 
     // Return access token and user data
-    reply.status(200).send(result);
+    sendSuccess(reply, result);
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(401).send({ error: error.message });
+    request.log.error(error);
+    if (error instanceof z.ZodError) {
+      sendError(reply, ApiError.validationError(error.errors));
+    } else if (error instanceof Error && error.message.includes('Invalid credentials')) {
+      sendError(reply, ApiError.unauthorized(error.message));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
@@ -93,20 +110,16 @@ export async function refreshHandler(
     const refreshToken = (request as any).cookies.refreshToken;
 
     if (!refreshToken) {
-      reply.status(401).send({ error: 'No refresh token provided' });
-      return;
+      throw ApiError.unauthorized('No refresh token provided');
     }
 
     // Refresh access token
     const result = await refreshAccessToken(refreshToken);
 
-    reply.status(200).send(result);
+    sendSuccess(reply, result);
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(401).send({ error: error.message });
-    } else {
-      reply.status(500).send({ error: 'Internal server error' });
-    }
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -131,9 +144,10 @@ export async function logoutHandler(
       path: '/',
     });
 
-    reply.status(200).send({ message: 'Logged out successfully' });
+    sendSuccess(reply, { message: 'Logged out successfully' });
   } catch (error) {
-    reply.status(500).send({ error: 'Internal server error' });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -147,10 +161,9 @@ export async function verifyEmailHandler(
 ): Promise<void> {
   try {
     const { token } = request.query;
-    
+
     if (!token) {
-      reply.status(400).send({ error: 'Verification token is required' });
-      return;
+      throw ApiError.badRequest('Verification token is required');
     }
 
     const result = await verifyEmail(token);
@@ -169,13 +182,10 @@ export async function verifyEmailHandler(
       expires: refreshTokenExpiry,
     });
 
-    reply.status(200).send(result);
+    sendSuccess(reply, result);
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
-    } else {
-      reply.status(500).send({ error: 'Internal server error' });
-    }
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -190,12 +200,13 @@ export async function forgotPasswordHandler(
   try {
     const dto = forgotPasswordSchema.parse(request.body);
     const result = await forgotPassword(dto);
-    reply.status(200).send(result);
+    sendSuccess(reply, result);
   } catch (error) {
+    request.log.error(error);
     if (error instanceof z.ZodError) {
-      reply.status(400).send({ error: 'Invalid email format' });
+      sendError(reply, ApiError.badRequest('Invalid email format'));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
@@ -211,14 +222,13 @@ export async function resetPasswordHandler(
   try {
     const dto = resetPasswordSchema.parse(request.body);
     const result = await resetPassword(dto);
-    reply.status(200).send(result);
+    sendSuccess(reply, result);
   } catch (error) {
+    request.log.error(error);
     if (error instanceof z.ZodError) {
-      reply.status(400).send({ error: 'Validation failed', details: error.errors });
-    } else if (error instanceof Error) {
-      reply.status(400).send({ error: error.message });
+      sendError(reply, ApiError.validationError(error.errors));
     } else {
-      reply.status(500).send({ error: 'Internal server error' });
+      sendError(reply, error);
     }
   }
 }
@@ -233,15 +243,15 @@ export async function resendVerificationHandler(
 ): Promise<void> {
   try {
     const { email } = request.body as { email: string };
-    
+
     if (!email || typeof email !== 'string') {
-      reply.status(400).send({ error: 'Email is required' });
-      return;
+      throw ApiError.badRequest('Email is required');
     }
 
     const result = await resendVerification(email);
-    reply.status(200).send(result);
+    sendSuccess(reply, result);
   } catch (error) {
-    reply.status(500).send({ error: 'Internal server error' });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }

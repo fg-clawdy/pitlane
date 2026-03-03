@@ -1,6 +1,7 @@
 import { FastifyRequest } from 'fastify';
 import { verifyToken, TokenPayload } from './tokens';
 import { PrismaClient } from '@prisma/client';
+import { ApiError, sendError } from './api-response';
 
 const prisma = new PrismaClient();
 
@@ -12,8 +13,7 @@ export async function authenticate(
     const authHeader = request.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      reply.status(401).send({ error: 'No token provided' });
-      return;
+      throw ApiError.unauthorized('No token provided');
     }
 
     const token = authHeader.substring(7);
@@ -35,22 +35,17 @@ export async function authenticate(
     });
 
     if (!user) {
-      reply.status(401).send({ error: 'User not found' });
-      return;
+      throw ApiError.unauthorized('User not found');
     }
 
     if (user.status !== 'active') {
-      reply.status(401).send({ error: 'Account is not active' });
-      return;
+      throw ApiError.unauthorized('Account is not active');
     }
 
     (request as any).user = user;
   } catch (error) {
-    if (error instanceof Error) {
-      reply.status(401).send({ error: error.message });
-    } else {
-      reply.status(401).send({ error: 'Invalid token' });
-    }
+    // Re-throw the error to let Fastify's error handler deal with it
+    throw error instanceof ApiError ? error : ApiError.unauthorized('Invalid token');
   }
 }
 

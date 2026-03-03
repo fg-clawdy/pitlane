@@ -10,140 +10,70 @@ import { authenticate } from '../../lib/auth';
 
 const draftsController = new DraftsController(sharedDraftsService);
 
-/**
- * GET /api/v1/leagues/:id/drafts
- * Get all draft windows for a league
- */
+// Handler functions (untyped to match leagues.routes.ts pattern)
+
 async function getLeagueDraftWindowsHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.getLeagueDraftWindows(request, reply);
 }
 
-/**
- * GET /api/v1/leagues/:id/drafts/current
- * Get current draft window for a league
- */
 async function getCurrentDraftWindowHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.getCurrentDraftWindow(request, reply);
 }
 
-/**
- * GET /api/v1/drafts/:draftId
- * Get draft window by ID
- */
 async function getDraftWindowHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.getDraftWindow(request, reply);
 }
 
-/**
- * GET /api/v1/drafts/:draftId/state
- * Get draft state
- */
 async function getDraftStateHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.getDraftState(request, reply);
 }
 
-/**
- * POST /api/v1/drafts/:draftId/picks
- * Submit a draft pick
- */
 async function submitPickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.submitPick(request, reply);
 }
 
-/**
- * POST /api/v1/admin/drafts/open-scheduled
- * Open scheduled draft windows
- */
-async function openScheduledDraftWindowsHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  await draftsController.openScheduledDraftWindows(request, reply);
-}
-
-/**
- * POST /api/v1/admin/drafts/close-expired
- * Close expired draft windows
- */
-async function closeExpiredDraftWindowsHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  await draftsController.closeExpiredDraftWindows(request, reply);
-}
-
-/**
- * POST /api/v1/admin/drafts/create-for-race/:raceId
- * Create draft windows for a race
- */
-async function createDraftWindowsForRaceHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  await draftsController.createDraftWindowsForRace(request, reply);
-}
-
-/**
- * POST /api/v1/admin/drafts/:draftId/resolve-missed/:leagueMemberId
- * Resolve a missed pick
- */
-async function resolveMissedPickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  await draftsController.resolveMissedPick(request, reply);
-}
-
-/**
- * GET /api/v1/users/me/auto-draft-preferences
- * Get user's auto-draft preferences
- */
 async function getAutoDraftPreferencesHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.getAutoDraftPreferences(request, reply);
 }
 
-/**
- * PUT /api/v1/users/me/auto-draft-preferences
- * Set user's auto-draft preferences
- */
 async function setAutoDraftPreferencesHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.setAutoDraftPreferences(request, reply);
 }
 
-/**
- * PATCH /api/v1/drafts/:draftId/picks/:pickId/override
- * Commissioner override a draft pick
- */
 async function commissionerOverridePickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.commissionerOverridePick(request, reply);
 }
 
-/**
- * POST /api/v1/drafts/:draftId/assign-pick
- * Commissioner assign a pick to member who missed
- */
-async function commissionerAssignPickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  await draftsController.commissionerAssignPick(request, reply);
+async function commissionerAssignMissedPickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.commissionerAssignMissedPick(request, reply);
 }
 
-/**
- * POST /api/v1/admin/substitutions/:substitutionId/process
- * Process a driver substitution
- */
+async function openScheduledDraftWindowsHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.openScheduledDraftWindows(request, reply);
+}
+
+async function closeExpiredDraftWindowsHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.closeExpiredDraftWindows(request, reply);
+}
+
+async function createDraftWindowsForRaceHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.createDraftWindowsForRace(request, reply);
+}
+
+async function resolveMissedPickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await draftsController.resolveMissedPick(request, reply);
+}
+
 async function processDriverSubstitutionHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.processDriverSubstitution(request, reply);
 }
 
-/**
- * GET /api/v1/users/me/redraft-windows
- * Get active redraft windows for current user
- */
 async function getActiveRedraftWindowsHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.getActiveRedraftWindows(request, reply);
 }
 
-/**
- * POST /api/v1/substitutions/:substitutionId/redraft
- * Submit a redraft pick
- */
 async function submitRedraftPickHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   await draftsController.submitRedraftPick(request, reply);
-}
-
-/**
- * GET /api/v1/drafts/:draftId/substitutions/:substitutionId/impact
- * Get substitution impact for a draft window
- */
-async function getSubstitutionImpactHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  await draftsController.getSubstitutionImpact(request, reply);
 }
 
 /**
@@ -151,107 +81,21 @@ async function getSubstitutionImpactHandler(request: FastifyRequest, reply: Fast
  */
 export async function draftsRoutes(fastify: FastifyInstance): Promise<void> {
   // League draft endpoints (require auth)
-  fastify.get('/leagues/:id/drafts', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 60,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, getLeagueDraftWindowsHandler);
-
-  fastify.get('/leagues/:id/drafts/current', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 60,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, getCurrentDraftWindowHandler);
+  fastify.get('/leagues/:id/drafts', { preHandler: authenticate }, getLeagueDraftWindowsHandler);
+  fastify.get('/leagues/:id/drafts/current', { preHandler: authenticate }, getCurrentDraftWindowHandler);
 
   // Draft window endpoints (require auth)
-  fastify.get('/drafts/:draftId', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 60,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, getDraftWindowHandler);
-
-  fastify.get('/drafts/:draftId/state', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 60,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, getDraftStateHandler);
-
-  fastify.post('/drafts/:draftId/picks', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 30,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, submitPickHandler);
+  fastify.get('/drafts/:draftId', { preHandler: authenticate }, getDraftWindowHandler);
+  fastify.get('/drafts/:draftId/state', { preHandler: authenticate }, getDraftStateHandler);
+  fastify.post('/drafts/:draftId/picks', { preHandler: authenticate }, submitPickHandler);
 
   // Auto-draft preference endpoints (require auth)
-  fastify.get('/users/me/auto-draft-preferences', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 30,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, getAutoDraftPreferencesHandler);
-
-  fastify.put('/users/me/auto-draft-preferences', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 10,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, setAutoDraftPreferencesHandler);
+  fastify.get('/users/me/auto-draft-preferences', { preHandler: authenticate }, getAutoDraftPreferencesHandler);
+  fastify.put('/users/me/auto-draft-preferences', { preHandler: authenticate }, setAutoDraftPreferencesHandler);
 
   // Commissioner override endpoints (commissioner only)
-  fastify.patch('/drafts/:draftId/picks/:pickId/override', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 10,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, commissionerOverridePickHandler);
-
-  fastify.post('/drafts/:draftId/assign-pick', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 10,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, commissionerAssignPickHandler);
+  fastify.patch('/drafts/:draftId/picks/:pickId/override', { preHandler: authenticate }, commissionerOverridePickHandler);
+  fastify.post('/drafts/:draftId/assign-pick', { preHandler: authenticate }, commissionerAssignMissedPickHandler);
 
   // Admin endpoints for draft management
   fastify.post('/admin/drafts/open-scheduled', openScheduledDraftWindowsHandler);
@@ -260,44 +104,9 @@ export async function draftsRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post('/admin/drafts/:draftId/resolve-missed/:leagueMemberId', resolveMissedPickHandler);
 
   // Driver substitution endpoints (US-014)
-  // Admin: Process a driver substitution after confirmation
   fastify.post('/admin/substitutions/:substitutionId/process', processDriverSubstitutionHandler);
-
-  // User: Get active redraft windows
-  fastify.get('/users/me/redraft-windows', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 30,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, getActiveRedraftWindowsHandler);
-
-  // User: Submit a redraft pick (after driver substitution)
-  fastify.post('/substitutions/:substitutionId/redraft', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 10,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, submitRedraftPickHandler);
-
-  // User: Get substitution impact for a draft window
-  fastify.get('/drafts/:draftId/substitutions/:substitutionId/impact', {
-    preHandler: authenticate,
-    config: {
-      rateLimit: {
-        max: 30,
-        timeWindow: '1 minute',
-        keyGenerator: (request: FastifyRequest) => (request as any).user?.userId || request.ip,
-      },
-    },
-  }, getSubstitutionImpactHandler);
+  fastify.get('/users/me/redraft-windows', { preHandler: authenticate }, getActiveRedraftWindowsHandler);
+  fastify.post('/substitutions/:substitutionId/redraft', { preHandler: authenticate }, submitRedraftPickHandler);
 }
 
 /**

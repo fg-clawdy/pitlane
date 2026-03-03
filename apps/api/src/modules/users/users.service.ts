@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { ApiError } from '../../lib/api-response';
 import { verifyPassword, hashPassword } from '../../lib/password';
 import { UserProfile, UpdateProfileDto, ChangePasswordDto, PushSubscriptionDto, EmailChangeRequestDto, EmailChangeResponse, EmailChangeStatus } from './types';
 import crypto from 'crypto';
@@ -87,9 +88,9 @@ export async function updateUserProfile(userId: string, dto: UpdateProfileDto): 
 
 export async function changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw new Error('User not found');
+  if (!user) throw ApiError.notFound('User');
   const isValid = await verifyPassword(dto.currentPassword, user.passwordHash);
-  if (!isValid) throw new Error('Current password is incorrect');
+  if (!isValid) throw ApiError.forbidden('Current password is incorrect');
   const newHash = await hashPassword(dto.newPassword);
   await prisma.$transaction([
     prisma.user.update({ where: { id: userId }, data: { passwordHash: newHash } }),
@@ -118,14 +119,14 @@ export async function getSystemSetting(key: string, defaultValue: number): Promi
 export async function requestEmailChange(userId: string, dto: EmailChangeRequestDto): Promise<EmailChangeResponse> {
   // Verify password
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw new Error('User not found');
+  if (!user) throw ApiError.notFound('User');
   
   const isValid = await verifyPassword(dto.password, user.passwordHash);
-  if (!isValid) throw new Error('Password is incorrect');
+  if (!isValid) throw ApiError.forbidden('Password is incorrect');
 
   // Check if new email is different
   if (dto.newEmail.toLowerCase() === user.email.toLowerCase()) {
-    throw new Error('New email must be different from current email');
+    throw ApiError.badRequest('New email must be different from current email');
   }
 
   // Check if new email is already in use
@@ -135,7 +136,7 @@ export async function requestEmailChange(userId: string, dto: EmailChangeRequest
       NOT: { id: userId }
     }
   });
-  if (existingUser) throw new Error('Email is already in use');
+  if (existingUser) throw ApiError.conflict('Email is already in use');
 
   // Cancel any existing pending request
   await prisma.emailChangeRequest.updateMany({

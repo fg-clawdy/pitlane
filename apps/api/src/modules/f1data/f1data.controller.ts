@@ -6,6 +6,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { F1DataService } from './f1data.service';
 import { PrismaClient } from '@prisma/client';
+import { ApiError, ErrorCode, sendSuccess, sendError, getAuthenticatedUser, getOptionalUser } from '../../lib/api-response';
 
 const prisma = new PrismaClient();
 const f1dataService = new F1DataService(prisma);
@@ -38,16 +39,10 @@ interface ResolveDiscrepancyBody {
 export async function getSeasons(_request: FastifyRequest, reply: FastifyReply) {
   try {
     const seasons = await f1dataService.getSeasons();
-    return reply.send({
-      success: true,
-      data: seasons
-    });
+    sendSuccess(reply, seasons);
   } catch (error) {
-    console.error('Error fetching seasons:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to fetch seasons'
-    });
+    _request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -62,23 +57,14 @@ export async function getRacesBySeason(
   try {
     const year = parseInt(request.params.year, 10);
     if (isNaN(year)) {
-      return reply.code(400).send({
-        success: false,
-        message: 'Invalid year parameter'
-      });
+      throw ApiError.badRequest('Invalid year parameter');
     }
 
     const races = await f1dataService.getRaces(year);
-    return reply.send({
-      success: true,
-      data: races
-    });
+    sendSuccess(reply, races);
   } catch (error) {
-    console.error('Error fetching races:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to fetch races'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -95,31 +81,19 @@ export async function getRace(
     const round = parseInt(request.params.round, 10);
 
     if (isNaN(year) || isNaN(round)) {
-      return reply.code(400).send({
-        success: false,
-        message: 'Invalid year or round parameter'
-      });
+      throw ApiError.badRequest('Invalid year or round parameter');
     }
 
     const race = await f1dataService.getRace(year, round);
     
     if (!race) {
-      return reply.code(404).send({
-        success: false,
-        message: 'Race not found'
-      });
+      throw ApiError.notFound('Race');
     }
 
-    return reply.send({
-      success: true,
-      data: race
-    });
+    sendSuccess(reply, race);
   } catch (error) {
-    console.error('Error fetching race:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to fetch race'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -134,23 +108,14 @@ export async function getDriversBySeason(
   try {
     const year = parseInt(request.params.year, 10);
     if (isNaN(year)) {
-      return reply.code(400).send({
-        success: false,
-        message: 'Invalid year parameter'
-      });
+      throw ApiError.badRequest('Invalid year parameter');
     }
 
     const drivers = await f1dataService.getDrivers(year);
-    return reply.send({
-      success: true,
-      data: drivers
-    });
+    sendSuccess(reply, drivers);
   } catch (error) {
-    console.error('Error fetching drivers:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to fetch drivers'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -165,23 +130,14 @@ export async function getTeamsBySeason(
   try {
     const year = parseInt(request.params.year, 10);
     if (isNaN(year)) {
-      return reply.code(400).send({
-        success: false,
-        message: 'Invalid year parameter'
-      });
+      throw ApiError.badRequest('Invalid year parameter');
     }
 
     const teams = await f1dataService.getTeams(year);
-    return reply.send({
-      success: true,
-      data: teams
-    });
+    sendSuccess(reply, teams);
   } catch (error) {
-    console.error('Error fetching teams:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to fetch teams'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -192,16 +148,10 @@ export async function getTeamsBySeason(
 export async function getAllTeams(_request: FastifyRequest, reply: FastifyReply) {
   try {
     const teams = await f1dataService.getAllTeams();
-    return reply.send({
-      success: true,
-      data: teams
-    });
+    sendSuccess(reply, teams);
   } catch (error) {
-    console.error('Error fetching all teams:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to fetch teams'
-    });
+    _request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -214,23 +164,13 @@ export async function syncCurrentSeason(_request: FastifyRequest, reply: Fastify
     const result = await f1dataService.syncCurrentSeason();
     
     if (result.errors.length > 0) {
-      return reply.code(207).send({
-        success: true,
-        data: result,
-        warnings: result.errors
-      });
+      _request.log.error({ errors: result.errors }, 'Errors during season sync');
     }
 
-    return reply.send({
-      success: true,
-      data: result
-    });
+    sendSuccess(reply, result);
   } catch (error) {
-    console.error('Error syncing season:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to sync season'
-    });
+    _request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -247,24 +187,14 @@ export async function getRaceResults(
     const round = parseInt(request.params.round, 10);
 
     if (isNaN(year) || isNaN(round)) {
-      return reply.code(400).send({
-        success: false,
-        message: 'Invalid year or round parameter'
-      });
+      throw ApiError.badRequest('Invalid year or round parameter');
     }
 
     const results = await f1dataService.getRaceResults(year, round);
-    
-    return reply.send({
-      success: true,
-      data: results
-    });
+    sendSuccess(reply, results);
   } catch (error) {
-    console.error('Error fetching race results:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to fetch race results'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -281,40 +211,23 @@ export async function syncRaceResults(
     const round = parseInt(request.params.round, 10);
 
     if (isNaN(year) || isNaN(round)) {
-      return reply.code(400).send({
-        success: false,
-        message: 'Invalid year or round parameter'
-      });
+      throw ApiError.badRequest('Invalid year or round parameter');
     }
 
     const result = await f1dataService.pollRaceResults(year, round, 1);
     
     if (result.errors.length > 0) {
-      return reply.code(207).send({
-        success: true,
-        data: {
-          resultsSynced: result.resultsSynced,
-          raceId: result.raceId,
-          discrepancies: result.discrepancies
-        },
-        warnings: result.errors
-      });
+      request.log.error({ errors: result.errors }, 'Errors during race results sync');
     }
 
-    return reply.send({
-      success: true,
-      data: {
-        resultsSynced: result.resultsSynced,
-        raceId: result.raceId,
-        discrepancies: result.discrepancies
-      }
+    sendSuccess(reply, {
+      resultsSynced: result.resultsSynced,
+      raceId: result.raceId,
+      discrepancies: result.discrepancies
     });
   } catch (error) {
-    console.error('Error syncing race results:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to sync race results'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -335,14 +248,12 @@ export async function overrideRaceResult(
     // Validate field
     const allowedFields = ['position', 'points', 'status', 'time', 'fastestLap'];
     if (!allowedFields.includes(field)) {
-      return reply.code(400).send({
-        success: false,
-        message: `Invalid field. Allowed fields: ${allowedFields.join(', ')}`
-      });
+      throw ApiError.badRequest(`Invalid field. Allowed fields: ${allowedFields.join(', ')}`);
     }
 
     // Get user ID from request (would come from auth)
-    const adminUserId = (request as any).user?.id || 'system';
+    const user = getOptionalUser(request);
+    const adminUserId = user?.id || 'system';
 
     const result = await f1dataService.overrideRaceResult(
       resultId,
@@ -353,22 +264,13 @@ export async function overrideRaceResult(
     );
 
     if (!result.success) {
-      return reply.code(400).send({
-        success: false,
-        message: result.error
-      });
+      throw ApiError.badRequest(result.error || 'Failed to override race result');
     }
 
-    return reply.send({
-      success: true,
-      message: `Successfully overridden ${field} for race result`
-    });
+    sendSuccess(reply, { message: `Successfully overridden ${field} for race result` });
   } catch (error) {
-    console.error('Error overriding race result:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to override race result'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -385,14 +287,12 @@ export async function createDriverSubstitution(
     const { originalDriverId, replacementDriverId, reason } = request.body;
 
     if (!originalDriverId || !reason) {
-      return reply.code(400).send({
-        success: false,
-        message: 'originalDriverId and reason are required'
-      });
+      throw ApiError.badRequest('originalDriverId and reason are required');
     }
 
     // Get user ID from request (would come from auth)
-    const adminUserId = (request as any).user?.id || 'system';
+    const user = getOptionalUser(request);
+    const adminUserId = user?.id || 'system';
 
     const result = await f1dataService.createDriverSubstitution(
       raceId,
@@ -403,23 +303,16 @@ export async function createDriverSubstitution(
     );
 
     if (!result.success) {
-      return reply.code(400).send({
-        success: false,
-        message: result.error
-      });
+      throw ApiError.badRequest(result.error || 'Failed to create driver substitution');
     }
 
-    return reply.send({
-      success: true,
-      data: { substitutionId: result.substitutionId },
-      message: 'Driver substitution created successfully'
-    });
+    sendSuccess(reply, { 
+      substitutionId: result.substitutionId,
+      message: 'Driver substitution created successfully' 
+    }, 201);
   } catch (error) {
-    console.error('Error creating driver substitution:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to create driver substitution'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -437,22 +330,13 @@ export async function getAdminOverrideData(
     const data = await f1dataService.getAdminOverrideData(resultId);
 
     if (!data) {
-      return reply.code(404).send({
-        success: false,
-        message: 'Race result not found'
-      });
+      throw ApiError.notFound('Race result');
     }
 
-    return reply.send({
-      success: true,
-      data
-    });
+    sendSuccess(reply, data);
   } catch (error) {
-    console.error('Error fetching admin override data:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to fetch admin override data'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -469,16 +353,10 @@ export async function listRaceOverrides(
 
     const overrides = await f1dataService.listRaceOverrides(raceId);
 
-    return reply.send({
-      success: true,
-      data: overrides
-    });
+    sendSuccess(reply, overrides);
   } catch (error) {
-    console.error('Error listing race overrides:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to list race overrides'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }
 
@@ -495,14 +373,12 @@ export async function resolveDiscrepancy(
     const { resolution } = request.body;
 
     if (!resolution || !['accepted', 'rejected'].includes(resolution)) {
-      return reply.code(400).send({
-        success: false,
-        message: 'resolution must be "accepted" or "rejected"'
-      });
+      throw ApiError.badRequest('resolution must be "accepted" or "rejected"');
     }
 
     // Get user ID from request (would come from auth)
-    const adminUserId = (request as any).user?.id || 'system';
+    const user = getOptionalUser(request);
+    const adminUserId = user?.id || 'system';
 
     const result = await f1dataService.resolveDiscrepancy(
       discrepancyId,
@@ -511,21 +387,12 @@ export async function resolveDiscrepancy(
     );
 
     if (!result.success) {
-      return reply.code(400).send({
-        success: false,
-        message: result.error
-      });
+      throw ApiError.badRequest(result.error || 'Failed to resolve discrepancy');
     }
 
-    return reply.send({
-      success: true,
-      message: `Discrepancy ${resolution}`
-    });
+    sendSuccess(reply, { message: `Discrepancy ${resolution}` });
   } catch (error) {
-    console.error('Error resolving discrepancy:', error);
-    return reply.code(500).send({
-      success: false,
-      message: 'Failed to resolve discrepancy'
-    });
+    request.log.error(error);
+    sendError(reply, error);
   }
 }

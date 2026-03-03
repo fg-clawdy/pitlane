@@ -4,6 +4,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
+import { authenticate } from '../../lib/auth';
 import {
   getDashboardStatsHandler,
   listUsersHandler,
@@ -24,36 +25,36 @@ import {
 } from './admin.controller';
 
 /**
- * Admin routes - all require super_admin role (for now, open)
+ * Admin routes - all require super_admin role
  */
 export async function adminRoutes(fastify: FastifyInstance) {
-  // Dashboard stats
-  fastify.get('/admin/stats', getDashboardStatsHandler);
+  // Dashboard stats - admin only
+  fastify.get('/api/v1/admin/stats', { preHandler: authenticate }, getDashboardStatsHandler);
 
-  // User management
-  fastify.get('/admin/users', listUsersHandler);
-  fastify.get('/admin/users/:userId', getUserHandler);
-  fastify.patch('/admin/users/:userId', updateUserHandler);
+  // User management - admin only
+  fastify.get('/api/v1/admin/users', { preHandler: authenticate }, listUsersHandler);
+  fastify.get('/api/v1/admin/users/:userId', { preHandler: authenticate }, getUserHandler);
+  fastify.patch('/api/v1/admin/users/:userId', { preHandler: authenticate }, updateUserHandler);
 
-  // System settings
-  fastify.get('/admin/settings', getSystemSettingsHandler);
-  fastify.get('/admin/settings/:key', getSystemSettingHandler);
-  fastify.patch('/admin/settings', updateSystemSettingHandler);
+  // System settings - admin only
+  fastify.get('/api/v1/admin/settings', { preHandler: authenticate }, getSystemSettingsHandler);
+  fastify.get('/api/v1/admin/settings/:key', { preHandler: authenticate }, getSystemSettingHandler);
+  fastify.patch('/api/v1/admin/settings', { preHandler: authenticate }, updateSystemSettingHandler);
 
-  // Audit logs
-  fastify.get('/admin/audit-log', listAuditLogsHandler);
+  // Audit logs - admin only
+  fastify.get('/api/v1/admin/audit-log', { preHandler: authenticate }, listAuditLogsHandler);
 
-  // Commissioner flags
-  fastify.get('/admin/flags', listCommissionerFlagsHandler);
-  fastify.patch('/admin/flags/:flagId', updateCommissionerFlagHandler);
+  // Commissioner flags - admin only
+  fastify.get('/api/v1/admin/flags', { preHandler: authenticate }, listCommissionerFlagsHandler);
+  fastify.patch('/api/v1/admin/flags/:flagId', { preHandler: authenticate }, updateCommissionerFlagHandler);
 
-  // Notification log
-  fastify.get('/admin/notifications', listNotificationLogHandler);
+  // Notification log - admin only
+  fastify.get('/api/v1/admin/notifications', { preHandler: authenticate }, listNotificationLogHandler);
 
-  // Race data entry
-  fastify.get('/admin/races', listRacesHandler);
-  fastify.get('/admin/races/:raceId', getRaceForEntryHandler);
-  fastify.post('/admin/races/:raceId/results', enterRaceResultHandler);
-  fastify.post('/admin/races/:raceId/results/bulk', bulkEnterRaceResultsHandler);
-  fastify.delete('/admin/races/results/:resultId', deleteRaceResultHandler);
+  // Race data entry - admin only
+  fastify.get('/api/v1/admin/races', { preHandler: authenticate }, listRacesHandler);
+  fastify.get('/api/v1/admin/races/:raceId', { preHandler: authenticate }, getRaceForEntryHandler);
+  fastify.post('/api/v1/admin/races/:raceId/results', { preHandler: authenticate }, enterRaceResultHandler);
+  fastify.post('/api/v1/admin/races/:raceId/results/bulk', { preHandler: authenticate }, bulkEnterRaceResultsHandler);
+  fastify.delete('/api/v1/admin/races/results/:resultId', { preHandler: authenticate }, deleteRaceResultHandler);
 }

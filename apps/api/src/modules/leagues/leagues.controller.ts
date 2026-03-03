@@ -1,6 +1,21 @@
+/**
+ * Leagues Controller
+ * Handles league management endpoints
+ */
+
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import { LeaguesService } from './leagues.service';
 import { CreateLeagueInput, LeagueFilter, JoinLeagueInput, UpdateLeagueInput, UpdateDraftOrderInput, FlagIssueInput } from './types';
+import { 
+  createLeagueSchema, 
+  joinLeagueSchema, 
+  updateLeagueSchema, 
+  updateDraftOrderSchema, 
+  flagIssueSchema 
+} from './leagues.dto';
+import { ApiError, sendSuccess, sendError, getAuthenticatedUser, getOptionalUser } from '../../lib/api-response';
+import { auditAction } from '../../lib/audit';
 
 export class LeaguesController {
   constructor(private leaguesService: LeaguesService) {}
@@ -8,34 +23,32 @@ export class LeaguesController {
   /**
    * POST /api/v1/leagues - Create a new league
    */
-  async createLeague(request: FastifyRequest, reply: FastifyReply) {
+  async createLeague(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
-      const body = request.body as CreateLeagueInput;
-      const league = await this.leaguesService.createLeague(user.id, body);
-      return reply.status(201).send(league);
+      // Validate input
+      const input = createLeagueSchema.parse(request.body);
+      const league = await this.leaguesService.createLeague(user.id, input);
+      
+      // Audit log
+      await auditAction(request, 'CREATE_LEAGUE', 'League', league.id);
+      
+      sendSuccess(reply, league, 201);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('League name') || 
-            error.message.includes('Max players') ||
-            error.message.includes('maximum of 10') ||
-            error.message.includes('Season not found')) {
-          return reply.status(400).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to create league' });
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
+      }
     }
   }
 
   /**
    * GET /api/v1/leagues - Get public leagues
    */
-  async getPublicLeagues(request: FastifyRequest, reply: FastifyReply) {
+  async getPublicLeagues(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
       const query = request.query as { seasonId?: string; hasSpace?: string };
       const filters: LeagueFilter = {
@@ -45,202 +58,164 @@ export class LeaguesController {
       };
 
       const leagues = await this.leaguesService.getPublicLeagues(filters);
-      return reply.send(leagues);
+      sendSuccess(reply, leagues);
     } catch (error) {
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to get leagues' });
+      sendError(reply, error);
     }
   }
 
   /**
    * GET /api/v1/leagues/:id - Get league by ID
    */
-  async getLeague(request: FastifyRequest, reply: FastifyReply) {
+  async getLeague(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
+      const user = getOptionalUser(request);
       const userId = user?.id;
       const params = request.params as { id: string };
 
       const league = await this.leaguesService.getLeagueById(params.id, userId);
-      
+
       if (!league) {
-        return reply.status(404).send({ error: 'League not found' });
+        throw ApiError.notFound('League');
       }
 
       // Check visibility - private leagues only visible to members
       if (league.visibility === 'private' && !user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
+        throw ApiError.unauthorized();
       }
 
-      return reply.send(league);
+      sendSuccess(reply, league);
     } catch (error) {
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to get league' });
+      sendError(reply, error);
     }
   }
 
   /**
    * GET /api/v1/users/me/leagues - Get user's leagues
    */
-  async getUserLeagues(request: FastifyRequest, reply: FastifyReply) {
+  async getUserLeagues(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const leagues = await this.leaguesService.getUserLeagues(user.id);
-      return reply.send(leagues);
+      sendSuccess(reply, leagues);
     } catch (error) {
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to get user leagues' });
+      sendError(reply, error);
     }
   }
 
   /**
    * POST /api/v1/leagues/:id/join - Join a league directly
    */
-  async joinLeague(request: FastifyRequest, reply: FastifyReply) {
+  async joinLeague(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string };
-      const body = request.body as JoinLeagueInput;
-
-      const result = await this.leaguesService.joinLeague(params.id, user.id, body);
       
+      // Validate input
+      if (!params.id || params.id.length === 0) {
+        throw ApiError.badRequest('League ID is required');
+      }
+      
+      const input = joinLeagueSchema.parse(request.body);
+
+      const result = await this.leaguesService.joinLeague(params.id, user.id, input);
+
+      // Audit log
+      await auditAction(request, 'JOIN_LEAGUE', 'League', params.id, { teamName: input.teamName });
+
       if (result.requiresApproval) {
-        return reply.status(202).send({
+        sendSuccess(reply, {
           message: 'Join request submitted. Awaiting commissioner approval.',
+          ...result,
+        }, 202);
+      } else {
+        sendSuccess(reply, {
+          message: 'Successfully joined the league',
           ...result,
         });
       }
-
-      return reply.status(200).send({
-        message: 'Successfully joined the league',
-        ...result,
-      });
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found') ||
-            error.message.includes('already a member') ||
-            error.message.includes('full') ||
-            error.message.includes('maximum of 10') ||
-            error.message.includes('Team name') ||
-            error.message.includes('mid-season') ||
-            error.message.includes('pending join request')) {
-          return reply.status(400).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to join league' });
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
+      }
     }
   }
 
   /**
    * POST /api/v1/leagues/:id/leave - Leave a league
    */
-  async leaveLeague(request: FastifyRequest, reply: FastifyReply) {
+  async leaveLeague(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string };
       await this.leaguesService.leaveLeague(params.id, user.id);
-      
-      return reply.status(200).send({ message: 'Successfully left the league' });
+
+      sendSuccess(reply, { message: 'Successfully left the league' });
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not a member') ||
-            error.message.includes('Commissioner cannot leave')) {
-          return reply.status(400).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to leave league' });
+      sendError(reply, error);
     }
   }
 
   /**
    * GET /api/v1/join/:token - Get league by invite token
    */
-  async getLeagueByInviteToken(request: FastifyRequest, reply: FastifyReply) {
+  async getLeagueByInviteToken(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
       const params = request.params as { token: string };
       const result = await this.leaguesService.getLeagueByInviteToken(params.token);
-      
-      return reply.send(result);
+
+      sendSuccess(reply, result);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('Invalid invite link')) {
-          return reply.status(404).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to get league' });
+      sendError(reply, error);
     }
   }
 
   /**
    * POST /api/v1/join/:token - Join league via invite token
    */
-  async joinViaInviteToken(request: FastifyRequest, reply: FastifyReply) {
+  async joinViaInviteToken(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { token: string };
       const body = request.body as JoinLeagueInput;
 
       const result = await this.leaguesService.joinViaInviteToken(params.token, user.id, body);
-      
+
       if (result.requiresApproval) {
-        return reply.status(202).send({
+        sendSuccess(reply, {
           message: 'Join request submitted. Awaiting commissioner approval.',
+          ...result,
+        }, 202);
+      } else {
+        sendSuccess(reply, {
+          message: 'Successfully joined the league',
           ...result,
         });
       }
-
-      return reply.status(200).send({
-        message: 'Successfully joined the league',
-        ...result,
-      });
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('Invalid invite link') ||
-            error.message.includes('expired') ||
-            error.message.includes('maximum uses') ||
-            error.message.includes('already used') ||
-            error.message.includes('already a member') ||
-            error.message.includes('full') ||
-            error.message.includes('maximum of 10') ||
-            error.message.includes('Team name') ||
-            error.message.includes('mid-season') ||
-            error.message.includes('pending join request')) {
-          return reply.status(400).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to join league' });
+      sendError(reply, error);
     }
   }
 
   /**
    * POST /api/v1/leagues/:id/invite-links - Create invite link
    */
-  async createInviteLink(request: FastifyRequest, reply: FastifyReply) {
+  async createInviteLink(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string };
       const body = request.body as { maxUses?: number } | undefined;
@@ -250,124 +225,87 @@ export class LeaguesController {
         user.id,
         body?.maxUses
       );
-      
-      return reply.status(201).send(inviteLink);
+
+      sendSuccess(reply, inviteLink, 201);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found') ||
-            error.message.includes('Only the commissioner')) {
-          return reply.status(403).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to create invite link' });
+      sendError(reply, error);
     }
   }
 
   /**
    * GET /api/v1/leagues/:id/invite-links - Get invite links
    */
-  async getInviteLinks(request: FastifyRequest, reply: FastifyReply) {
+  async getInviteLinks(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string };
       const inviteLinks = await this.leaguesService.getInviteLinks(params.id, user.id);
-      
-      return reply.send(inviteLinks);
+
+      sendSuccess(reply, inviteLinks);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('Not a member') ||
-            error.message.includes('Only the commissioner')) {
-          return reply.status(403).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to get invite links' });
+      sendError(reply, error);
     }
   }
 
   /**
    * GET /api/v1/leagues/:id/members - Get league members
    */
-  async getLeagueMembers(request: FastifyRequest, reply: FastifyReply) {
+  async getLeagueMembers(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
       const params = request.params as { id: string };
       const members = await this.leaguesService.getLeagueMembers(params.id);
-      
-      return reply.send(members);
+
+      sendSuccess(reply, members);
     } catch (error) {
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to get league members' });
+      sendError(reply, error);
     }
   }
 
   /**
    * DELETE /api/v1/leagues/:id/members/:memberId - Remove member
    */
-  async removeMember(request: FastifyRequest, reply: FastifyReply) {
+  async removeMember(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string; memberId: string };
       await this.leaguesService.removeMember(params.id, params.memberId, user.id);
-      
-      return reply.status(200).send({ message: 'Member removed from league' });
+
+      await auditAction(request, 'REMOVE_MEMBER', 'LeagueMember', params.memberId);
+      sendSuccess(reply, { message: 'Member removed from league' });
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found') ||
-            error.message.includes('Only the commissioner') ||
-            error.message.includes('Member not found') ||
-            error.message.includes('Cannot remove the commissioner')) {
-          return reply.status(400).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to remove member' });
+      sendError(reply, error);
     }
   }
 
   /**
    * GET /api/v1/leagues/:id/join-requests - Get join requests
    */
-  async getJoinRequests(request: FastifyRequest, reply: FastifyReply) {
+  async getJoinRequests(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string };
       const requests = await this.leaguesService.getJoinRequests(params.id, user.id);
-      
-      return reply.send(requests);
+
+      sendSuccess(reply, requests);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found') ||
-            error.message.includes('Only the commissioner')) {
-          return reply.status(403).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to get join requests' });
+      sendError(reply, error);
     }
   }
 
   /**
    * PATCH /api/v1/leagues/:id/join-requests/:requestId - Approve/reject join request
    */
-  async resolveJoinRequest(request: FastifyRequest, reply: FastifyReply) {
+  async resolveJoinRequest(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string; requestId: string };
       const body = request.body as { approve: boolean };
@@ -378,134 +316,118 @@ export class LeaguesController {
         user.id,
         body.approve
       );
-      
-      return reply.status(200).send(result);
+
+      await auditAction(request, body.approve ? 'APPROVE_JOIN_REQUEST' : 'REJECT_JOIN_REQUEST', 'JoinRequest', params.requestId);
+      sendSuccess(reply, result);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found') ||
-            error.message.includes('Only the commissioner') ||
-            error.message.includes('Join request not found') ||
-            error.message.includes('already resolved') ||
-            error.message.includes('full') ||
-            error.message.includes('maximum of 10')) {
-          return reply.status(400).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to resolve join request' });
+      sendError(reply, error);
     }
   }
 
   /**
    * PATCH /api/v1/leagues/:id - Update league settings
    */
-  async updateLeague(request: FastifyRequest, reply: FastifyReply) {
+  async updateLeague(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string };
-      const body = request.body as UpdateLeagueInput;
+      const body = updateLeagueSchema.parse(request.body);
 
       const league = await this.leaguesService.updateLeague(params.id, user.id, body);
-      return reply.send(league);
+      
+      await auditAction(request, 'UPDATE_LEAGUE', 'League', params.id);
+      sendSuccess(reply, league);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found') ||
-            error.message.includes('Only the commissioner') ||
-            error.message.includes('League name') ||
-            error.message.includes('Max players') ||
-            error.message.includes('Cannot reduce')) {
-          return reply.status(400).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to update league' });
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
+      }
     }
   }
 
   /**
    * DELETE /api/v1/leagues/:id - Delete league
    */
-  async deleteLeague(request: FastifyRequest, reply: FastifyReply) {
+  async deleteLeague(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string };
       await this.leaguesService.deleteLeague(params.id, user.id);
-      
-      return reply.status(204).send();
+
+      await auditAction(request, 'DELETE_LEAGUE', 'League', params.id);
+      reply.code(204).send();
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found') ||
-            error.message.includes('Only the commissioner')) {
-          return reply.status(403).send({ error: error.message });
-        }
-      }
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to delete league' });
+      sendError(reply, error);
     }
   }
 
   /**
-   * PATCH /api/v1/leagues/:id/draft-order - Update draft order
+   * PATCH /api/v1/leagues/:id/draft-order - Update draft order (commissioner only)
    */
-  async updateDraftOrder(request: FastifyRequest, reply: FastifyReply) {
+  async updateDraftOrder(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string };
-      const body = request.body as UpdateDraftOrderInput;
-
-      const members = await this.leaguesService.updateDraftOrder(params.id, user.id, body);
-      return reply.send(members);
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found') ||
-            error.message.includes('Only the commissioner') ||
-            error.message.includes('Draft order') ||
-            error.message.includes('Invalid member') ||
-            error.message.includes('Duplicate')) {
-          return reply.status(400).send({ error: error.message });
-        }
+      
+      // Validate input
+      if (!params.id || params.id.length === 0) {
+        throw ApiError.badRequest('League ID is required');
       }
+      
+      const input = updateDraftOrderSchema.parse(request.body);
+
+      const members = await this.leaguesService.updateDraftOrder(params.id, user.id, input);
+      
+      // Audit log
+      await auditAction(request, 'UPDATE_DRAFT_ORDER', 'League', params.id);
+      
+      sendSuccess(reply, members);
+    } catch (error) {
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to update draft order' });
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
+      }
     }
   }
 
   /**
    * POST /api/v1/leagues/:id/flag - Flag issue to admin
    */
-  async flagIssue(request: FastifyRequest, reply: FastifyReply) {
+  async flagIssue(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const user = (request as any).user;
-      if (!user) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
+      const user = getAuthenticatedUser(request);
 
       const params = request.params as { id: string };
-      const body = request.body as FlagIssueInput;
-
-      const flag = await this.leaguesService.flagIssue(params.id, user.id, body);
-      return reply.status(201).send(flag);
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found') ||
-            error.message.includes('Only the commissioner')) {
-          return reply.status(403).send({ error: error.message });
-        }
+      
+      // Validate input
+      if (!params.id || params.id.length === 0) {
+        throw ApiError.badRequest('League ID is required');
       }
+      
+      const input = flagIssueSchema.parse(request.body);
+
+      const flag = await this.leaguesService.flagIssue(params.id, user.id, input);
+      
+      // Audit log
+      await auditAction(request, 'FLAG_ISSUE', 'CommissionerFlag', flag.id);
+      
+      sendSuccess(reply, flag, 201);
+    } catch (error) {
       request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to flag issue' });
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
+      }
     }
   }
 }

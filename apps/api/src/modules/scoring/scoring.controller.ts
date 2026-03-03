@@ -5,8 +5,11 @@
 
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
+import { z } from 'zod';
 import ScoringService from './scoring.service';
 import { StandingsEntry, SeasonPodium, WeeklyWinner, LeagueStandingsView, MemberRaceHistory, LeagueDriverStanding } from './types';
+import { ApiError, ErrorCode, sendSuccess, sendError, getOptionalUser } from '../../lib/api-response';
+import { raceScoresParamSchema } from './scoring.dto';
 
 export class ScoringController {
   private scoringService: ScoringService;
@@ -24,15 +27,15 @@ export class ScoringController {
   async getLeagueStandings(
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
-  ): Promise<{ standings: StandingsEntry[] }> {
+  ): Promise<void> {
     const { id: leagueId } = request.params;
 
     try {
       const standings = await this.scoringService.getLeagueStandings(leagueId);
-      return { standings };
+      sendSuccess(reply, { standings });
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      sendError(reply, error);
     }
   }
 
@@ -43,10 +46,12 @@ export class ScoringController {
   async getRaceScores(
     request: FastifyRequest<{ Params: { id: string; round: string } }>,
     reply: FastifyReply
-  ): Promise<{ scores: any[] }> {
-    const { id: leagueId, round } = request.params;
-
+  ): Promise<void> {
     try {
+      const params = raceScoresParamSchema.parse(request.params);
+      const leagueId = params.id;
+      const round = params.round;
+
       // Get the league to find season
       const league = await this.prisma.league.findUnique({
         where: { id: leagueId },
@@ -54,28 +59,30 @@ export class ScoringController {
       });
 
       if (!league) {
-        reply.code(404);
-        throw new Error('League not found');
+        throw ApiError.notFound('League');
       }
 
       // Get the race by round
       const race = await this.prisma.race.findFirst({
         where: {
           seasonId: league.seasonId,
-          round: parseInt(round, 10),
+          round,
         },
       });
 
       if (!race) {
-        reply.code(404);
-        throw new Error('Race not found');
+        throw ApiError.notFound('Race');
       }
 
       const scores = await this.scoringService.getRaceScoresForLeague(leagueId, race.id);
-      return { scores };
+      sendSuccess(reply, { scores });
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
+      }
     }
   }
 
@@ -86,20 +93,20 @@ export class ScoringController {
   async calculateRaceScores(
     request: FastifyRequest<{ Params: { raceId: string } }>,
     reply: FastifyReply
-  ): Promise<{ leaguesProcessed: number; errors: string[] }> {
+  ): Promise<void> {
     const { raceId } = request.params;
 
     try {
       const result = await this.scoringService.calculateAndSaveAllLeagueScores(raceId);
       
       if (result.errors.length > 0) {
-        console.error('[ScoringController] Errors during score calculation:', result.errors);
+        request.log.error({ errors: result.errors }, '[ScoringController] Errors during score calculation');
       }
       
-      return result;
+      sendSuccess(reply, result);
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      sendError(reply, error);
     }
   }
 
@@ -110,15 +117,15 @@ export class ScoringController {
   async recalculateLeagueScores(
     request: FastifyRequest<{ Params: { leagueId: string } }>,
     reply: FastifyReply
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<void> {
     const { leagueId } = request.params;
 
     try {
       await this.scoringService.recalculateAllLeagueScores(leagueId);
-      return { success: true, message: 'Scores recalculated successfully' };
+      sendSuccess(reply, { message: 'Scores recalculated successfully' });
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      sendError(reply, error);
     }
   }
 
@@ -129,15 +136,15 @@ export class ScoringController {
   async getSeasonPodium(
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
-  ): Promise<SeasonPodium> {
+  ): Promise<void> {
     const { id: leagueId } = request.params;
 
     try {
       const podium = await this.scoringService.getSeasonPodium(leagueId);
-      return podium;
+      sendSuccess(reply, podium);
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      sendError(reply, error);
     }
   }
 
@@ -148,15 +155,15 @@ export class ScoringController {
   async getWeeklyWinners(
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
-  ): Promise<{ weeklyWinners: WeeklyWinner[] }> {
+  ): Promise<void> {
     const { id: leagueId } = request.params;
 
     try {
       const weeklyWinners = await this.scoringService.getWeeklyWinners(leagueId);
-      return { weeklyWinners };
+      sendSuccess(reply, { weeklyWinners });
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      sendError(reply, error);
     }
   }
 
@@ -167,10 +174,12 @@ export class ScoringController {
   async getRaceWeeklyWinner(
     request: FastifyRequest<{ Params: { id: string; round: string } }>,
     reply: FastifyReply
-  ): Promise<{ weeklyWinner: WeeklyWinner | null }> {
-    const { id: leagueId, round } = request.params;
-
+  ): Promise<void> {
     try {
+      const params = raceScoresParamSchema.parse(request.params);
+      const leagueId = params.id;
+      const round = params.round;
+
       // Get the league to find season
       const league = await this.prisma.league.findUnique({
         where: { id: leagueId },
@@ -178,28 +187,30 @@ export class ScoringController {
       });
 
       if (!league) {
-        reply.code(404);
-        throw new Error('League not found');
+        throw ApiError.notFound('League');
       }
 
       // Get the race by round
       const race = await this.prisma.race.findFirst({
         where: {
           seasonId: league.seasonId,
-          round: parseInt(round, 10),
+          round,
         },
       });
 
       if (!race) {
-        reply.code(404);
-        throw new Error('Race not found');
+        throw ApiError.notFound('Race');
       }
 
       const weeklyWinner = await this.scoringService.getWeeklyWinnerForRace(leagueId, race.id);
-      return { weeklyWinner };
+      sendSuccess(reply, { weeklyWinner });
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      if (error instanceof z.ZodError) {
+        sendError(reply, ApiError.validationError(error.errors));
+      } else {
+        sendError(reply, error);
+      }
     }
   }
 
@@ -210,7 +221,7 @@ export class ScoringController {
   async getLeagueStandingsView(
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
-  ): Promise<LeagueStandingsView> {
+  ): Promise<void> {
     const { id: leagueId } = request.params;
 
     try {
@@ -221,18 +232,17 @@ export class ScoringController {
       });
 
       if (!league) {
-        reply.code(404);
-        throw new Error('League not found');
+        throw ApiError.notFound('League');
       }
 
       // For private leagues, would need auth check here
       // For now, allow access to all
 
       const view = await this.scoringService.getLeagueStandingsView(leagueId);
-      return view;
+      sendSuccess(reply, view);
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      sendError(reply, error);
     }
   }
 
@@ -243,15 +253,15 @@ export class ScoringController {
   async getLeagueDriverStandings(
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
-  ): Promise<{ driverStandings: LeagueDriverStanding[] }> {
+  ): Promise<void> {
     const { id: leagueId } = request.params;
 
     try {
       const driverStandings = await this.scoringService.getLeagueDriverStandings(leagueId);
-      return { driverStandings };
+      sendSuccess(reply, { driverStandings });
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      sendError(reply, error);
     }
   }
 
@@ -262,7 +272,7 @@ export class ScoringController {
   async getMemberRaceHistory(
     request: FastifyRequest<{ Params: { id: string; memberId: string } }>,
     reply: FastifyReply
-  ): Promise<{ history: MemberRaceHistory[] }> {
+  ): Promise<void> {
     const { id: leagueId, memberId } = request.params;
 
     try {
@@ -276,15 +286,14 @@ export class ScoringController {
       });
 
       if (!member) {
-        reply.code(404);
-        throw new Error('Member not found in league');
+        throw ApiError.notFound('Member in league');
       }
 
       const history = await this.scoringService.getMemberRaceHistory(memberId);
-      return { history };
+      sendSuccess(reply, { history });
     } catch (error) {
-      reply.code(500);
-      throw error;
+      request.log.error(error);
+      sendError(reply, error);
     }
   }
 }

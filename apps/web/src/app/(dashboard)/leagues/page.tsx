@@ -27,7 +27,7 @@ export default function LeaguesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = sessionStorage.getItem('accessToken');
+    const token = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
     if (!token) {
       router.push('/login');
       return;
